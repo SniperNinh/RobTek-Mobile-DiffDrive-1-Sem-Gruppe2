@@ -1,9 +1,6 @@
 import heapq
 import json
 
-from os import chdir
-chdir("common/graf prototype")
-
 class StateGraphDijkstraSolver:
     def __init__(self, adjacency_list: dict, capacity: int):
         self.adjecency_list = adjacency_list

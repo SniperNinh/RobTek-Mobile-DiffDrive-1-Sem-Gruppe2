@@ -5,8 +5,6 @@ import json
 from random import random
 from time import time
 
-from os import chdir
-chdir("common/graf prototype")
 
 from networkx.algorithms.approximation import traveling_salesman_problem, christofides
 
