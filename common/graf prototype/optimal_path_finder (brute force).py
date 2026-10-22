@@ -4,6 +4,9 @@ from itertools import permutations
 from random import shuffle
 from math import inf, factorial
 
+from os import chdir
+chdir("common/graf prototype")
+
 
 G = Graph(weighted_edge_list)
 

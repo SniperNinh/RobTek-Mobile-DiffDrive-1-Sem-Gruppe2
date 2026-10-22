@@ -1,6 +1,9 @@
 import heapq
 import json
 
+from os import chdir
+chdir("common/graf prototype")
+
 class StateGraphDijkstraSolver:
     def __init__(self, adjacency_list: dict, capacity: int):
         self.adjecency_list = adjacency_list
@@ -201,6 +204,59 @@ class StateGraphDijkstraSolver:
                     heapq.heappush(Q, (new_state["total cost"], self.counter(), new_state))
 
 
+
+class SolverDualMagazines(StateGraphDijkstraSolver):
+    def __init__(self, adjacency_list, capacity):
+        """
+        Capacity = capacity per magazine
+        """
+        super().__init__(adjacency_list, capacity)
+
+    def move_is_legal(self, state: dict, move: str):
+            """
+            Determine if a move is legal from a given state.
+            Overides the move_is_legal method to use the 2_magazines model of storing packages
+    
+            A move is given as a string.
+            The first word of the string is either "pickup" or "deliver"
+            The second word is the node to goto for pickup or delivery
+            like "W1" for a delivery or "1" for a pickup.
+            If a move is a pickup, the last word is the number of packages to pick up.
+                
+            Example of a move: "pickup 1 2"
+            """
+    
+            move_parts = move.split(" ")
+    
+            if move_parts[0] == "pickup":
+    
+                goto_node = move_parts[1]
+                number_of_packages = move_parts[2]
+    
+                node_adjecent = goto_node in self.get_adjecent_nodes(state["node"]) # redundant
+                if goto_node == "1":
+                    capacity_valid = int(number_of_packages) + state["white onboard"] <= self.capacity
+                elif goto_node == "2":
+                    capacity_valid = int(number_of_packages) + state["red onboard"] <= self.capacity
+    
+                return node_adjecent and capacity_valid
+                
+            elif move_parts[0] == "deliver":
+    
+                goto_node = move_parts[1]
+    
+                node_adjecent = goto_node in self.get_adjecent_nodes(state["node"]) # redundant
+                delivery_node_empty = goto_node in state["red undelivered"] or goto_node in state["white undelivered"]
+                if goto_node[0] == "W" and state["white onboard"] > 0:
+                    capacity_valid = True
+                elif goto_node[0] == "R" and state["red onboard"] > 0:
+                    capacity_valid = True
+                else:
+                    capacity_valid = False
+    
+                return node_adjecent and delivery_node_empty and capacity_valid
+
+
 def get_complete_path(route: list[tuple]):
     
     path = []
@@ -234,3 +290,14 @@ for capacity in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
 with open("optimal_paths_dijkstra.json", "w", encoding="utf-8") as f:
     json.dump(optimal_routes, f, indent=4, ensure_ascii=False)
 
+optimal_routes_with_two_mags = {}
+
+for capacity in [1, 2, 3, 4, 5]:
+    solver = SolverDualMagazines(adj_list, capacity)
+    solved_route = solver.solve()
+    optimal_routes_with_two_mags[str(capacity)] = (solved_route, get_complete_path(solved_route))
+    print(f"Route with capacity {capacity} solved ({capacity}/10)")
+
+with open("optimal_routes_with_two_mags.json", "w", encoding="utf-8") as f:
+    json.dump(optimal_routes_with_two_mags, f, indent=4, ensure_ascii=False)
+    

@@ -2,6 +2,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from math import inf
 
+from os import chdir
+chdir("common/graf prototype")
+
 # create a graph
 G = nx.Graph()
 
