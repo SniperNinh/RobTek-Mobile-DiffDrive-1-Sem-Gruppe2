@@ -149,6 +149,9 @@ with open("optimal_paths_brute_force.json", "r", encoding="utf-8") as f:
 with open("optimal_paths_dijkstra.json", "r", encoding="utf-8") as f:
     optimal_paths_dijkstra = json.load(f)
 
+with open("optimal_routes_with_two_mags.json", "r", encoding="utf-8") as f:
+    optimal_paths_pez = json.load(f)
+
 dijkstra_col1 = pg.color.Color(0, 255, 0)
 dijkstra_col2 = pg.color.Color(0, 150, 100)
 
@@ -168,7 +171,12 @@ robots = [
     Robot(robot_speed, robot_rot_speed, optimal_paths_dijkstra["8"][1][1], dijkstra_col1.lerp(dijkstra_col2, 0.7), "n=8", finish_times),
     Robot(robot_speed, robot_rot_speed, optimal_paths_dijkstra["9"][1][1], dijkstra_col1.lerp(dijkstra_col2, 0.8), "n=9", finish_times),
     Robot(robot_speed, robot_rot_speed, optimal_paths_dijkstra["10"][1][1], dijkstra_col1.lerp(dijkstra_col2, 0.9), "n=10", finish_times),
-    Robot(robot_speed, robot_rot_speed, optimal_paths_dijkstra["3"][1][1], (255, 135, 0), "n=3", finish_times)
+    Robot(robot_speed, robot_rot_speed, optimal_paths_dijkstra["3"][1][1], (255, 135, 0), "n=3", finish_times),
+    Robot(robot_speed, robot_rot_speed, optimal_paths_pez["1"][1][1], (0, 190, 150), "pez=2", finish_times),
+    Robot(robot_speed, robot_rot_speed, optimal_paths_pez["2"][1][1], (0, 190, 150), "pez=4", finish_times),
+    Robot(robot_speed, robot_rot_speed, optimal_paths_pez["3"][1][1], (0, 190, 150), "pez=6", finish_times),
+    Robot(robot_speed, robot_rot_speed, optimal_paths_pez["4"][1][1], (0, 190, 150), "pez=8", finish_times),
+    Robot(robot_speed, robot_rot_speed, optimal_paths_pez["5"][1][1], (0, 190, 150), "pez=10", finish_times)
 ]
 
 def draw_scoreboard():
