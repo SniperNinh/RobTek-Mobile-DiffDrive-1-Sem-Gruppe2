@@ -6,14 +6,14 @@ from time import sleep
 def PIO_set_step():
     wrap_target()
 
-    mov(y, isr)             #
-    label("step_0")         #
-    mov(x, osr)             #1
-    set(pins, 0b1100)         #1
-    label("pwm_0")          #
-    jmp(x_dec, "pwm_0")     #96
-    set(pins, 0b0000) [30]    #31
-    jmp(y_dec, "step_0")    #1
+    mov(y, isr)
+    label("step_0")
+    mov(x, osr)
+    set(pins, 0b1100)
+    label("pwm_0")
+    jmp(x_dec, "pwm_0")
+    set(pins, 0b0000) [30]
+    jmp(y_dec, "step_0")
 
     mov(y, isr)
     label("step_1")
@@ -46,20 +46,20 @@ def PIO_set_step():
 
 
 class StepperMotorPIO:
-    def __init__(self, base_pin, sm_id=0, sm_freq=2_160_000, pwm_delay=96, step_repeats=138):
+    def __init__(self, base_pin, sm_id=0, sm_freq=2_160_000, pwm_delay=96, pwm_repeats=138):
         self._sm = StateMachine(sm_id, PIO_set_step, freq=sm_freq, set_base=Pin(base_pin))
         
-        self.update_delays(step_repeats, pwm_delay)
+        self.update_delays(pwm_repeats, pwm_delay)
 
     
-    def update_delays(self, new_step_repeats=None, new_pwm_delay=None):
+    def update_delays(self, new_pwm_repeats=None, new_pwm_delay=None):
         if new_step_repeats != None:
-            self.step_repeats = new_step_repeats
+            self.pwm_repeats = new_pwm_repeats
         
         if new_pwm_delay != None:
             self.pwm_delay = new_pwm_delay
         
-        self._sm.put(self.step_repeats)
+        self._sm.put(self.pwm_repeats)
         self._sm.exec("pull()")
         self._sm.exec("mov(isr, osr)")
 
@@ -68,12 +68,12 @@ class StepperMotorPIO:
     
     def stop(self):
         self._sm.active(0)
-        self._sm.exec("set(pins, 0b00)")
+        self._sm.exec("set(pins, 0b0000)")
 
 
 
 try:
-    PIO_stepper = StepperMotorPIO(base_pin=16, step_repeats=4000)
+    PIO_stepper = StepperMotorPIO(base_pin=16)
     PIO_stepper._sm.active(1)
     while True:
         pass

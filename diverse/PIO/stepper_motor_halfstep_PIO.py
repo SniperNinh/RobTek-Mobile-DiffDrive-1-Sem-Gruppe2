@@ -62,15 +62,15 @@ def PIO_half_step():
 
 
 class StepperMotorPIO:
-    def __init__(self, base_pin, sm_id=0, sm_freq=2_160_000, step_repeats=138):
+    def __init__(self, base_pin, sm_id=0, sm_freq=2_160_000, pwm_repeats=138):
         self._sm = StateMachine(sm_id, PIO_half_step, freq=sm_freq, set_base=Pin(base_pin))
-        self.step_repeats = step_repeats
-        self.update_delays(step_repeats)
+        self.pwm_repeats = step_rpwm_repeatsepeats
+        self.update_delays(self.pwm_repeats)
 
     
-    def update_delays(self, new_step_repeats):
-        self.step_repeats = new_step_repeats
-        self._sm.put(self.step_repeats)
+    def update_delays(self, new_pwm_repeats):
+        self.pwm_repeats = new_pwm_repeats
+        self._sm.put(self.pwm_repeats)
         self._sm.exec("pull()")
     
     def stop(self):
