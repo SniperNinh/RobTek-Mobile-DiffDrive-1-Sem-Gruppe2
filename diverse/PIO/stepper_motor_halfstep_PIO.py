@@ -5,8 +5,8 @@ from time import sleep
 @asm_pio(set_init=(PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW))
 def PIO_half_step():
 
-    pwm_high = 0
-    pwm_low = 31
+    pwm_high = 5
+    pwm_low = 0
 
     wrap_target()
 
@@ -64,7 +64,7 @@ def PIO_half_step():
 class StepperMotorPIO:
     def __init__(self, base_pin, sm_id=0, sm_freq=2_160_000, pwm_repeats=138):
         self._sm = StateMachine(sm_id, PIO_half_step, freq=sm_freq, set_base=Pin(base_pin))
-        self.pwm_repeats = step_rpwm_repeatsepeats
+        self.pwm_repeats = pwm_repeats
         self.update_delays(self.pwm_repeats)
 
     
@@ -78,7 +78,7 @@ class StepperMotorPIO:
         self._sm.exec("set(pins, 0b0000)")
 
 
-PIO_stepper = StepperMotorPIO(base_pin=19)
+PIO_stepper = StepperMotorPIO(base_pin=16, sm_freq=144_000)
 try:
     PIO_stepper._sm.active(1)
     while True:
