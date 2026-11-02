@@ -39,22 +39,20 @@ class DifferentialDrive:
         c1 = 1 if dir1 == "forward" else -1
         c2 = 1 if dir2 == "forward" else -1
 
-        # init button to stop the motors in action
-        stop_button = Pin(27, Pin.IN, Pin.PULL_UP)
 
         # iterate through all steps and set pwm of motors accordingly 
         for _ in range(total):
 
-            if stop_button.value() == False:
-                break # stopper hvis knappen trykkes
 
             # increment or decrement the phase index
             self.phase1 = (self.phase1 + c1) % n
             self.phase2 = (self.phase2 + c2) % n
 
             # apply pwm to motors
-            self.motor1.set_step(seq1[self.phase1])
-            self.motor2.set_step(seq2[self.phase2])
+            if driveMotor1:
+                self.motor1.set_step(seq1[self.phase1])
+            if driveMotor2:
+                self.motor2.set_step(seq2[self.phase2])
 
             sleep(delay)
 
@@ -63,9 +61,7 @@ class DifferentialDrive:
             self.motor2.total_steps += c2
 
         # set both motors phase to 25% of the last set phase to brake the motors
-        if driveMotor1:
             self.motor1.set_step([i*0.25 for i in seq1[self.phase1]])
-        if driveMotor2:
             self.motor2.set_step([i*0.25 for i in seq2[self.phase2]])
 
     def drive(self, distance: float, delay=0.002):
