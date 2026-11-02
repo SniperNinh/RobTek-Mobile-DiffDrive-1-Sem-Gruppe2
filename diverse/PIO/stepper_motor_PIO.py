@@ -1,6 +1,8 @@
-from machine import Pin
+from machine import Pin, PWM
 from rp2 import PIO, StateMachine, asm_pio
-from time import sleep, tick_us, ticks_diff
+from time import sleep, ticks_us, ticks_diff
+
+
 
 # start i python hvis man lige vil forstå hvad der foregår
 
@@ -76,23 +78,23 @@ class StepperMotorPIO:
         # pwm_pct is only for the python pwm
         self.pwm_freq = pwm_freq
 
+        self._sm = StateMachine(sm_id, PIO_set_step, freq=self.pwm_freq * clock_cycles_per_PWM, set_base=Pin(base_pin))
+        self._sm_id = sm_id
+
+        self.base_pin = base_pin
+
         self.pwm_pct = pwm_pct
         self.DEBUG_max_pwm_pct = DEBUG_max_pwm_pct
 
-        self._sm = StateMachine(sm_id, PIO_set_step, freq=self.pwm_freq * clock_cycles_per_PWM, set_base=Pin(base_pin))
-
-        self.update_sm_pwm_repeats(100)
-        self.update_sm_direction("forward")
-
-        self.outputs = [PWM(Pin(p + base_pin, Pin.OUT)) for p in range(4)] # laver min pwm pin outputs   
+        self.outputs = [PWM(Pin(p + self.base_pin, Pin.OUT)) for p in range(4)] # laver min pwm pin outputs   
         for output in self.outputs: #sætter frekvensen på mine pins
-            output.freq(frequency)
-
+            output.freq(self.pwm_freq)
+        
         self.current_step = 0
         self.current_step_count = 0
         self.current_steps_goal = 0
         self.currently_moving_stepper = False
-        self.last_step_tick = tick_us()
+        self.last_step_tick = ticks_us()
 
         self.modes = {
             "full": [ # full step: to spoler tændt ad gangen
@@ -114,12 +116,13 @@ class StepperMotorPIO:
         }
 
     def update_sm_pwm_delay(self, new_delay):
-        if isinstance(new_delay, float):
+        if not isinstance(new_delay, float):
             raise ValueError("delay must be a float")
 
-        self.pwm_repeats = int((1/self.pwm_freq) * new_delay)
+        pwm_repeats = int(self.pwm_freq * new_delay)
+        print(pwm_repeats)
         
-        self._sm.put(self.pwm_repeats)  # we add the pwm_repeats value to the fifo-queue
+        self._sm.put(pwm_repeats)  # we add the pwm_repeats value to the fifo-queue
         self._sm.exec("pull()")         # we make the statemachine move the pwm-repeats value into the osr
         self._sm.exec("mov(isr, osr)")  # and we copy it into the isr where the pwm_repeats value lives
 
@@ -130,17 +133,19 @@ class StepperMotorPIO:
             self.pio_direction = 1
         else:
             raise ValueError("Direction needs to be forward or backward, direction not changed in PIO")
-
+        print(self.pio_direction)
         self._sm.put(self.pio_direction)
         self._sm.exec("pull()")
         self._sm.exec("mov(x, osr)")
 
     def rotate_coninuously(self, direction, delay):
+        self._sm = StateMachine(self._sm_id, PIO_set_step, freq=self.pwm_freq * clock_cycles_per_PWM, set_base=Pin(self.base_pin))
+
+        self.update_sm_pwm_delay(delay)
         self.update_sm_direction(direction)
 
-        self.update_sm_pwm_repeats(delay)
-
         self._sm.active(1)
+        print("test")
 
     def set_step(self, step, pwm_pct=None):
         if pwm_pct != None and not isinstance(pwm_pct, float):
@@ -160,8 +165,8 @@ class StepperMotorPIO:
 
         # lock_motor makes the motor reset the last step with a lower pwm_pct to avoid momentum
         if not self.currently_moving_stepper: return
-        current_tick_us = tick_us
-        if ticks_diff(current_tick_us, self.last_step_tick) < self.delay: return
+        current_tick_us = ticks_us()
+        if ticks_diff(current_tick_us, self.last_step_tick) < (self.delay * 1_000_000): return
         self.last_step_tick = current_tick_us
         
         self.current_step += 1
@@ -174,12 +179,6 @@ class StepperMotorPIO:
         if self.current_step_count >= self.current_steps_goal:
             print(f"{self} is done moving stepper")
             self.currently_moving_stepper = False
-
-
-        # check if we are in a move_steps sequence
-        # if no, then print "im done" once, and 
-        # if yes, then set the correct step
-        pass
 
     def generate_microstep_sequence(self, microsteps):
         """Generate and return a complete microstep sequence."""
@@ -207,13 +206,17 @@ class StepperMotorPIO:
         if direction not in ("forward", "backward"): raise ValueError("Direction needs to be forward or backward")
 
         if step_mode in ("full", "half"):
-            self.current_sequence = self.modes(step_mode)
+            self.current_sequence = self.modes[step_mode]
         else:
             self.current_sequence = self.generate_microstep_sequence(microsteps)
 
         if direction == "backward":
             self.current_sequence.reverse()
         
+        self.outputs = [PWM(Pin(p + self.base_pin, Pin.OUT)) for p in range(4)] # laver min pwm pin outputs   
+        for output in self.outputs: #sætter frekvensen på mine pins
+            output.freq(self.pwm_freq)
+
         self.delay = delay
 
         self.current_step = 0
@@ -230,9 +233,16 @@ class StepperMotorPIO:
 
 PIO_stepper = StepperMotorPIO(base_pin=4)
 try:
-    PIO_stepper.rotate_coninuously("forward", 0.001)
-    while True:
-        pass
+    PIO_stepper.rotate_coninuously("forward", 0.002)
+    print(PIO_stepper._sm.active())
+    sleep(3)
+    PIO_stepper.stop()
+    sleep(1)
+    PIO_stepper.start_move_steps(200, 0.002, "full")
+    while PIO_stepper.currently_moving_stepper:
+        PIO_stepper.move_stepper()
+    PIO_stepper.stop()
 
-except:
+except Exception as e:
+    print(e)
     PIO_stepper.stop()
