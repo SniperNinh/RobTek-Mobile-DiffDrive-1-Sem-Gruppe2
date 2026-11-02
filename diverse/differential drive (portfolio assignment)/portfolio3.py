@@ -44,15 +44,16 @@ class DiffDriveWithLogger(DifferentialDrive):
             stop_button = Pin(27, Pin.IN, Pin.PULL_UP)
 
             steps_taken = 0
+            log_entries = []
     
             # iterate through all steps and set pwm of motors accordingly 
             for _ in range(total):
 
                 steps_taken += 1
-
-                with open("log.txt", "a") as log:
-                    data = self.adcs.read_u16()
-                    log.write(f"{ticks_ms()-self.time_start}; {(180/full_steps)*steps_taken}; {data} \n")
+                data = self.adcs.read_u16()
+                log_entries.append(
+                    f"{ticks_ms()-self.time_start}; {(180/full_steps)*steps_taken}; {data}\n"
+                )
     
                 if stop_button.value() == False:
                     break # stopper hvis knappen trykkes
@@ -62,19 +63,22 @@ class DiffDriveWithLogger(DifferentialDrive):
                 self.phase2 = (self.phase2 + c2) % n
     
                 # apply pwm to motors
-                self.motor1.set_step(seq1[self.phase1])
-                self.motor2.set_step(seq2[self.phase2])
+                if driveMotor1:
+                    self.motor1.set_step(seq1[self.phase1])
+                if driveMotor2:
+                    self.motor2.set_step(seq2[self.phase2])
     
                 sleep(delay)
     
                 # increment o decrement total steps according to direction c1 and c2
                 self.motor1.total_steps += c1
                 self.motor2.total_steps += c2
+
+            with open("log.txt", "a") as log:
+                log.writelines(log_entries)
     
             # set both motors phase to 25% of the last set phase to brake the motors
-            if driveMotor1:
                 self.motor1.set_step([i*0.25 for i in seq1[self.phase1]])
-            if driveMotor2:
                 self.motor2.set_step([i*0.25 for i in seq2[self.phase2]])
 
 
