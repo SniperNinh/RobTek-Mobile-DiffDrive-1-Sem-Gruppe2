@@ -235,7 +235,7 @@ if __name__ == "__main__":
         G, 
         node_pos, 
         edge_labels=edge_weights, 
-        font_size="x-small", 
+        font_size=10, 
         rotate=False
     )
 
