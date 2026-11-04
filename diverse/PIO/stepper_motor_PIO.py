@@ -118,9 +118,7 @@ class StepperMotorPIO:
     def update_sm_pwm_delay(self, new_delay):
         if not isinstance(new_delay, float):
             raise ValueError("delay must be a float")
-
         pwm_repeats = int(self.pwm_freq * new_delay)
-        print(pwm_repeats)
         
         self._sm.put(pwm_repeats)  # we add the pwm_repeats value to the fifo-queue
         self._sm.exec("pull()")         # we make the statemachine move the pwm-repeats value into the osr
@@ -133,7 +131,6 @@ class StepperMotorPIO:
             self.pio_direction = 1
         else:
             raise ValueError("Direction needs to be forward or backward, direction not changed in PIO")
-        print(self.pio_direction)
         self._sm.put(self.pio_direction)
         self._sm.exec("pull()")
         self._sm.exec("mov(x, osr)")
@@ -145,7 +142,6 @@ class StepperMotorPIO:
         self.update_sm_direction(direction)
 
         self._sm.active(1)
-        print("test")
 
     def set_step(self, step, pwm_pct=None):
         if pwm_pct != None and not isinstance(pwm_pct, float):
@@ -177,7 +173,6 @@ class StepperMotorPIO:
         self.set_step(self.current_sequence[self.current_step])
 
         if self.current_step_count >= self.current_steps_goal:
-            print(f"{self} is done moving stepper")
             self.currently_moving_stepper = False
 
     def generate_microstep_sequence(self, microsteps):
@@ -234,15 +229,20 @@ class StepperMotorPIO:
 PIO_stepper = StepperMotorPIO(base_pin=4)
 try:
     PIO_stepper.rotate_coninuously("forward", 0.002)
-    print(PIO_stepper._sm.active())
+    sleep(1)
+    PIO_stepper.update_sm_pwm_delay(0.002)
+    sleep(1)
+    for i in range(1, 100):
+        PIO_stepper.update_sm_pwm_delay(0.002*i)
+        sleep(0.1)
     sleep(3)
     PIO_stepper.stop()
-    sleep(1)
-    PIO_stepper.start_move_steps(200, 0.002, "full")
-    while PIO_stepper.currently_moving_stepper:
-        PIO_stepper.move_stepper()
-    PIO_stepper.stop()
+    #sleep(2)
+    #PIO_stepper.start_move_steps(200, 0.02, "half")
+    #while PIO_stepper.currently_moving_stepper:
+    #    PIO_stepper.move_stepper()
+    #PIO_stepper.stop()
 
-except Exception as e:
+except BaseException as e:
     print(e)
     PIO_stepper.stop()
