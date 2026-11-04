@@ -81,7 +81,7 @@ class DiffDriveWithLogger(DifferentialDrive):
 pwm = 0.75
 stepmode = "half"
 Microsteps = None
-Delay = 0.002
+Delay = 0.004
 
 # init motors and modes
 motor1 = StepperMotor([0, 1, 2, 3], pwm_pct=pwm, frequency=18_000) # pins are ordered weird on this motor because the wires are twisted
@@ -93,8 +93,6 @@ motor2.set_step_mode(stepmode, microsteps=Microsteps)
 robot = DiffDriveWithLogger(motor1, motor2, wheelbase=233, wheel_dia=87, steps_per_rev=200)
 
 sleep(1)
-
-Delay = 0.005   # 0.002 stalled earlier, so start here and lower it gradually
 
 
 robot.start_log()
