@@ -168,16 +168,14 @@ class StepperMotorPIO:
 
     def move_stepper(self):
         ## moves the motor through the current set sequence until its goal is reached
-
-        # lock_motor makes the motor reset the last step with a lower pwm_pct to avoid momentum
         if not self.currently_moving_stepper: return
         current_tick_us = ticks_us()
         if ticks_diff(current_tick_us, self.last_step_tick) < (self.delay * 1_000_000): return
         self.last_step_tick = current_tick_us
         
         self.current_step += 1
-        if self.current_step >= len(self.current_sequence):
-            self.current_step = 0
+        self.current_step %= len(self.current_sequence)
+        if self.current_step <= 0:
             self.current_step_count += 1
 
         self.set_step(self.current_sequence[self.current_step])
@@ -207,10 +205,10 @@ class StepperMotorPIO:
             sequence.append(row) # gemmer tilstanden i listen
         return sequence
 
-    def start_move_steps(self, steps, delay, step_mode, microsteps=None, direction="forward"):
+    def start_move_sequences(self, sequences, delay, step_mode, microsteps=None, direction="forward"):
         if self._sm.active():               raise ValueError("PIO is still running")
 
-        if not isinstance(steps, int):  raise ValueError("sequences must be a integer")
+        if not isinstance(sequences, int):  raise ValueError("sequences must be a integer")
 
         if not isinstance(delay, float):    raise ValueError("delay must be a float")
         elif delay < 0.001:                 raise ValueError("delay cant be less than 0.001s")
@@ -235,8 +233,19 @@ class StepperMotorPIO:
 
         self.current_step = 0
         self.current_step_count = 0
-        self.current_steps_goal = steps
+        self.current_steps_goal = sequences * len(self.current_sequence)
         self.currently_moving_stepper = True
+    
+    def lock_motor(self):
+        if self._sm.active():
+            raise ValueError("attempted to lock motor with sm still active")
+        
+        self._define_PWM_outputs()
+        self.currently_moving_stepper = False
+        if not isinstance(self.current_sequence, list):
+            self.set_step([1, 1, 0, 0])
+        else:
+            self.set_step(self.current_sequence[self.current_step])
 
     def stop(self):
         self._sm.active(0)
