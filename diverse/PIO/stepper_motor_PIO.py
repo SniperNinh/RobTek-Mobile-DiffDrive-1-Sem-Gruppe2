@@ -1,7 +1,7 @@
 from machine import Pin, PWM
 from rp2 import PIO, StateMachine, asm_pio
 from time import sleep, ticks_us, ticks_diff
-
+import math
 
 
 # start i python hvis man lige vil forstå hvad der foregår
@@ -26,15 +26,15 @@ while y != 0:
 
 # This value is hardcoded, its equal to pwm_high + pwm_low + 3
 # If this value is off the calculated frequencies by the class cant be trusted
-clock_cycles_per_PWM = 5
+clock_cycles_per_PWM = 40
 
 # by defining 'set_init' to a tupple with 4 entries we tell the 
 # statemachine running the program that we are working with 4 pins
 @asm_pio(set_init=(PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW))
 def PIO_set_step():
 
-    pwm_high = 0
-    pwm_low = 2
+    pwm_high = 7
+    pwm_low = 30
 
     mov(y, isr)   # we are copying the pwm_repeats value in the isr into the y-register
     wrap_target() # when the program hits 'wrap()' it returns here without using a cycle, kinda like a 'while True'
@@ -86,9 +86,7 @@ class StepperMotorPIO:
         self.pwm_pct = pwm_pct
         self.DEBUG_max_pwm_pct = DEBUG_max_pwm_pct
 
-        self.outputs = [PWM(Pin(p + self.base_pin, Pin.OUT)) for p in range(4)] # laver min pwm pin outputs   
-        for output in self.outputs: #sætter frekvensen på mine pins
-            output.freq(self.pwm_freq)
+        self._define_PWM_outputs()
         
         self.current_step = 0
         self.current_step_count = 0
@@ -114,12 +112,21 @@ class StepperMotorPIO:
                 [1, 0, 0, 1],
             ], 
         }
+    
+    def _define_PWM_outputs(self):
+        if self._sm.active():
+            self._sm.active(0)
+            print(ValueError("statemachine has been deactivated while defining PWM outputs"))
+
+        self.outputs = [PWM(Pin(p + self.base_pin, Pin.OUT)) for p in range(4)] # laver min pwm pin outputs   
+        for output in self.outputs: #sætter frekvensen på mine pins
+            output.freq(self.pwm_freq)
 
     def update_sm_pwm_delay(self, new_delay):
         if not isinstance(new_delay, float):
             raise ValueError("delay must be a float")
-        pwm_repeats = int(self.pwm_freq * new_delay)
-        
+        pwm_repeats = math.ceil(self.pwm_freq * new_delay)
+        print("pwm_repeats:", pwm_repeats, " actual delay:", pwm_repeats/self.pwm_freq)
         self._sm.put(pwm_repeats)  # we add the pwm_repeats value to the fifo-queue
         self._sm.exec("pull()")         # we make the statemachine move the pwm-repeats value into the osr
         self._sm.exec("mov(isr, osr)")  # and we copy it into the isr where the pwm_repeats value lives
@@ -135,26 +142,29 @@ class StepperMotorPIO:
         self._sm.exec("pull()")
         self._sm.exec("mov(x, osr)")
 
-    def rotate_coninuously(self, direction, delay):
+    def setup_PIO(self, direction, delay):
         self._sm = StateMachine(self._sm_id, PIO_set_step, freq=self.pwm_freq * clock_cycles_per_PWM, set_base=Pin(self.base_pin))
 
         self.update_sm_pwm_delay(delay)
         self.update_sm_direction(direction)
 
+    def start_sm(self):
         self._sm.active(1)
 
-    def set_step(self, step, pwm_pct=None):
-        if pwm_pct != None and not isinstance(pwm_pct, float):
-            raise ValueError("pwm_pct defined as a not float")
-
-        elif isinstance(pwm_pct, float):
-            if pwm_pct < 0 or pwm_pct > self.DEBUG_max_pwm_pct:
-                raise ValueError("pwm_pct must be between 0 and 0.20")
+    def set_step(self, step, override_pwm_pct=None):
+        if self._sm.active():
+            raise ValueError("cannot set step while PIO is running")
+        active_pwm_pct = self.pwm_pct
+        if override_pwm_pct != None and not isinstance(override_pwm_pct, float):
+            raise ValueError("override_pwm_pct defined as a not float")
+        elif isinstance(override_pwm_pct, float):
+            if override_pwm_pct < 0 or override_pwm_pct > self.DEBUG_max_pwm_pct:
+                raise ValueError(f"override_pwm_pct must be between 0 and {self.DEBUG_max_pwm_pct}")
             else:
-                self.pwm_pct = pwm_pct
+                active_pwm_pct = override_pwm_pct
 
         for output, duty in zip(self.outputs, step): # sender en tilstand ud til de 4 pins
-            output.duty_u16(int(self.pwm_pct * duty * 65535)) # omregner fra 0-1 til 16 bit dutycycle
+            output.duty_u16(int(active_pwm_pct * duty * 65535)) # omregner fra 0-1 til 16 bit dutycycle
 
     def move_stepper(self):
         ## moves the motor through the current set sequence until its goal is reached
@@ -176,15 +186,25 @@ class StepperMotorPIO:
             self.currently_moving_stepper = False
 
     def generate_microstep_sequence(self, microsteps):
-        """Generate and return a complete microstep sequence."""
-        
-        if not isinstance(microsteps, int) or microsteps < 4:
-            raise ValueError("microsteps must be a positive integer higher than 3")
-        
-        sequence = []
-        for step in range(microsteps * 4):
-            sequence.append([max(0, math.sin(math.pi * 2 * (step + i*microsteps)/(microsteps/4))) for i in [1, 0, 3, 2]])
-        
+        """microsteps = antallet af små steps et fuldt step bliver fordelt ud i.
+        cos/sin fading sørger for at torque ikke variere.
+        """
+        if not isinstance(microsteps, int) or microsteps < 1: # kun positive hele tal er gyldige
+            raise ValueError("microsteps must be a positive integer")
+        sequence = [] # her samles alle microstep tilstande
+        n = 4 * microsteps # 4 fulde steps i en hel cyklus gange antal microsteps                              
+        for k in range(n):
+            quadrant = k // microsteps # hvilket af de 4 fulde steps vi er i
+            angle = (math.pi/2) * (k % microsteps/microsteps) # hvor langt vi er i det fulde step (0 til 90 grader)
+
+            pin_fading_in = quadrant # pin der fader ind
+            pin_fading_out = (quadrant + 1) % 4 # næste pin, % 4 sørger for at den hopper rundt til 0
+
+            row = [0.0,0.0,0.0,0.0] # alle pins starter på 0
+            row[pin_fading_in] = math.cos(angle) # cos fader ned fra fuld styrke
+            row[pin_fading_out] = math.sin(angle) # sin fader op mod næste pin
+            
+            sequence.append(row) # gemmer tilstanden i listen
         return sequence
 
     def start_move_steps(self, steps, delay, step_mode, microsteps=None, direction="forward"):
@@ -204,13 +224,12 @@ class StepperMotorPIO:
             self.current_sequence = self.modes[step_mode]
         else:
             self.current_sequence = self.generate_microstep_sequence(microsteps)
+            print(self.current_sequence)
 
         if direction == "backward":
             self.current_sequence.reverse()
         
-        self.outputs = [PWM(Pin(p + self.base_pin, Pin.OUT)) for p in range(4)] # laver min pwm pin outputs   
-        for output in self.outputs: #sætter frekvensen på mine pins
-            output.freq(self.pwm_freq)
+        self._define_PWM_outputs()
 
         self.delay = delay
 
@@ -224,25 +243,3 @@ class StepperMotorPIO:
         self._sm.exec("set(pins, 0b0000)") # we set all the pins to be low through the statemachine
         self.currently_moving_stepper = False
         self.set_step([0, 0, 0, 0])
-
-
-PIO_stepper = StepperMotorPIO(base_pin=4)
-try:
-    PIO_stepper.rotate_coninuously("forward", 0.002)
-    sleep(1)
-    PIO_stepper.update_sm_pwm_delay(0.002)
-    sleep(1)
-    for i in range(1, 100):
-        PIO_stepper.update_sm_pwm_delay(0.002*i)
-        sleep(0.1)
-    sleep(3)
-    PIO_stepper.stop()
-    #sleep(2)
-    #PIO_stepper.start_move_steps(200, 0.02, "half")
-    #while PIO_stepper.currently_moving_stepper:
-    #    PIO_stepper.move_stepper()
-    #PIO_stepper.stop()
-
-except BaseException as e:
-    print(e)
-    PIO_stepper.stop()
