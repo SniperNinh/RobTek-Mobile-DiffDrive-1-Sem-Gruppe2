@@ -13,7 +13,14 @@ class DifferentialDrive:
         self.wheel_circ = math.pi * wheel_dia
         self.steps_per_rev = steps_per_rev 
         self.phase1 = 0
-        self.phase2 = 0        
+        self.phase2 = 0
+
+    def getAccelDelay(self, start_delay, end_delay, total_accel_steps, steps_taken):
+        delay_delta = (end_delay-start_delay)/total_accel_steps
+        if end_delay < start_delay:
+            return max(start_delay + steps_taken*delay_delta, end_delay)
+        else:
+            return min(start_delay + steps_taken*delay_delta, end_delay)
 
     def _move(self, full_steps: int, delay: float, dir1, dir2, driveMotor1 = True, driveMotor2 = True):
         """
@@ -39,10 +46,10 @@ class DifferentialDrive:
         c1 = 1 if dir1 == "forward" else -1
         c2 = 1 if dir2 == "forward" else -1
 
+        steps_taken = 0
 
         # iterate through all steps and set pwm of motors accordingly 
         for _ in range(total):
-
 
             # increment or decrement the phase index
             self.phase1 = (self.phase1 + c1) % n
@@ -54,6 +61,19 @@ class DifferentialDrive:
             if driveMotor2:
                 self.motor2.set_step(seq2[self.phase2])
 
+            # steps_taken += 1
+            # steps_to_accel = 200
+
+            # big_delay = 0.007
+            
+            
+            # if steps_taken < steps_to_accel:
+            #     accel_delay = self.getAccelDelay(big_delay, delay, steps_to_accel, steps_taken)
+            # elif total-steps_taken < steps_to_accel:
+            #     accel_delay = self.getAccelDelay(delay, big_delay, steps_to_accel, steps_taken-(total-steps_to_accel))
+
+            # sleep(accel_delay)
+            # print(accel_delay)
             sleep(delay)
 
             # increment o decrement total steps according to direction c1 and c2
