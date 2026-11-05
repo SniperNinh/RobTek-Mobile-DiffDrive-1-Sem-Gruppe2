@@ -279,3 +279,15 @@ After running the algorithm on n = {1, 2, ... 10} the resulting path lengths are
 <img src="images\plot.png" alt="drawing" height="250"/>
 
 NB. after n=3, the returns diminish quickly.
+
+<br>
+
+Using a model where packages are stored in one of two magazines attached to the robot (a red and a white mag), the constraints are slightly altered.\
+In the two-magazine configuration (a.k.a Pez) a white package may only be picked up if the number of white packages held is less than the individual mag capacity\
+and the same applies to red packages. The capacity of each color is now independent
+
+<img src="images\plot_with_pez.png" alt="drawing" height="250"/>
+
+<br>
+
+The pez model for all ***n*** (except for n=10) is less optimal than the normal model. For n=6 the difference is about 10%.
