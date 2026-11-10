@@ -1,9 +1,8 @@
 from machine import Pin, PWM
 from rp2 import PIO, StateMachine, asm_pio
-from time import sleep, ticks_us, ticks_diff
+from time import ticks_us, ticks_diff
 import math
-
-
+import gc
 # start i python hvis man lige vil forstå hvad der foregår
 
 
@@ -89,7 +88,6 @@ class StepperMotorPIO:
         self._define_PWM_outputs()
         
         self.current_step = 0
-        self.current_step_count = 0
         self.current_steps_goal = 0
         self.currently_moving_stepper = False
         self.last_step_tick = ticks_us()
@@ -103,13 +101,13 @@ class StepperMotorPIO:
             ],
             "half": [ # half step: skiftevis en og to spoler tændt
                 [1, 0, 0, 0],
-                [1, 1, 0, 0],
+                [math.sqrt(0.5), math.sqrt(0.5), 0, 0],
                 [0, 1, 0, 0],
-                [0, 1, 1, 0],
+                [0, math.sqrt(0.5), math.sqrt(0.5), 0],
                 [0, 0, 1, 0],
-                [0, 0, 1, 1],
+                [0, 0, math.sqrt(0.5), math.sqrt(0.5)],
                 [0, 0, 0, 1],
-                [1, 0, 0, 1],
+                [math.sqrt(0.5), 0, 0, math.sqrt(0.5)],
             ], 
         }
     
@@ -151,37 +149,28 @@ class StepperMotorPIO:
     def start_sm(self):
         self._sm.active(1)
 
-    def set_step(self, step, override_pwm_pct=None):
+    def set_step(self, step):
         if self._sm.active():
             raise ValueError("cannot set step while PIO is running")
-        active_pwm_pct = self.pwm_pct
-        if override_pwm_pct != None and not isinstance(override_pwm_pct, float):
-            raise ValueError("override_pwm_pct defined as a not float")
-        elif isinstance(override_pwm_pct, float):
-            if override_pwm_pct < 0 or override_pwm_pct > self.DEBUG_max_pwm_pct:
-                raise ValueError(f"override_pwm_pct must be between 0 and {self.DEBUG_max_pwm_pct}")
-            else:
-                active_pwm_pct = override_pwm_pct
-
         for output, duty in zip(self.outputs, step): # sender en tilstand ud til de 4 pins
-            output.duty_u16(int(active_pwm_pct * duty * 65535)) # omregner fra 0-1 til 16 bit dutycycle
+            output.duty_u16(duty) # omregner fra 0-1 til 16 bit dutycycle
 
-    def move_stepper(self):
+    def move_stepper(self, run_gc=False):
         ## moves the motor through the current set sequence until its goal is reached
         if not self.currently_moving_stepper: return
-        current_tick_us = ticks_us()
-        if ticks_diff(current_tick_us, self.last_step_tick) < (self.delay * 1_000_000): return
-        self.last_step_tick = current_tick_us
+        current_tick = ticks_us()
+        if ticks_diff(current_tick, self.last_step_tick) < (self.delay * 1_000_000): return
+        #if ticks_diff(current_tick, self.last_step_tick) > 3000: print(ticks_diff(current_tick, self.last_step_tick))
         
         self.current_step += 1
-        self.current_step %= len(self.current_sequence)
-        if self.current_step <= 0:
-            self.current_step_count += 1
 
-        self.set_step(self.current_sequence[self.current_step])
+        self.set_step(self.current_sequence[self.current_step % len(self.current_sequence)])
 
-        if self.current_step_count >= self.current_steps_goal:
+        self.last_step_tick = current_tick
+        if self.current_step >= self.current_steps_goal:
             self.currently_moving_stepper = False
+        
+        if run_gc: gc.collect()
 
     def generate_microstep_sequence(self, microsteps):
         """microsteps = antallet af små steps et fuldt step bliver fordelt ud i.
@@ -206,6 +195,7 @@ class StepperMotorPIO:
         return sequence
 
     def start_move_sequences(self, sequences, delay, step_mode, microsteps=None, direction="forward"):
+        print(direction)
         if self._sm.active():               raise ValueError("PIO is still running")
 
         if not isinstance(sequences, int):  raise ValueError("sequences must be a integer")
@@ -222,30 +212,31 @@ class StepperMotorPIO:
             self.current_sequence = self.modes[step_mode]
         else:
             self.current_sequence = self.generate_microstep_sequence(microsteps)
-            print(self.current_sequence)
+            #print(self.current_sequence)
 
         if direction == "backward":
             self.current_sequence.reverse()
-        
+        print(self.current_sequence)
+
+        self.current_sequence = [[int(i*(2**16-1)*self.pwm_pct) for i in step] for step in self.current_sequence]
+
         self._define_PWM_outputs()
 
         self.delay = delay
 
         self.current_step = 0
-        self.current_step_count = 0
         self.current_steps_goal = sequences * len(self.current_sequence)
         self.currently_moving_stepper = True
     
-    def lock_motor(self):
+    def lock_motor(self, lock_pwm_pct=0.04):
         if self._sm.active():
             raise ValueError("attempted to lock motor with sm still active")
         
+        pwm_pct_uint16 = int((2**16-1)*lock_pwm_pct)
+
         self._define_PWM_outputs()
         self.currently_moving_stepper = False
-        if not isinstance(self.current_sequence, list):
-            self.set_step([1, 1, 0, 0])
-        else:
-            self.set_step(self.current_sequence[self.current_step])
+        self.set_step([pwm_pct_uint16, pwm_pct_uint16, 0, 0])
 
     def stop(self):
         self._sm.active(0)
