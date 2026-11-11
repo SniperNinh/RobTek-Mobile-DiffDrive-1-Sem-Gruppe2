@@ -24,10 +24,10 @@ class DifferentialDrive:
                 else: self.motorRight.stop()
 
     def drive_straight(self, distance, step_mode="full", lock_motor=False, delay=0.002):
-        full_steps = int(abs(distance) / self.wheel_circ * self.steps_per_rev)
+        sequences = int(abs(distance) / self.wheel_circ * self.steps_per_rev)
         dir = "forward" if distance >= 0 else "backward"
         self._move(
-            sequences=full_steps,
+            sequences=sequences,
             delayLeft=delay,
             delayRight=delay,
             dirLeft=dir,
@@ -38,7 +38,7 @@ class DifferentialDrive:
 
     def turn_in_place(self, angle, step_mode="full", lock_motor=False, delay=0.002):
         arc = self.wheelbase_circ * abs(angle) / 360
-        full_steps = int(arc / self.wheel_circ * (self.steps_per_rev))
+        sequences = int(arc / self.wheel_circ * self.steps_per_rev)
         if angle >= 0:
             dirLeft="backward"
             dirRight="forward"
@@ -46,7 +46,7 @@ class DifferentialDrive:
             dirLeft="forward"
             dirRight="backward"
         self._move(
-            sequences=full_steps,
+            sequences=sequences,
             delayLeft=delay,
             delayRight=delay,
             dirLeft=dirLeft,
@@ -58,24 +58,3 @@ class DifferentialDrive:
     def stop(self):
         self.motorLeft.stop()
         self.motorRight.stop()
-
-"""Tuning"""
-pwm = 0.2
-stepmode = "full"
-Microsteps = None
-Delay = 0.005
-
-
-robot = DifferentialDrive(wheelbase=233, wheel_dia=87, steps_per_rev=50)
-
-#sleep(5) # wait 5 seconds to give us time to get the robot in place
-
-# drive around a square meter
-try:
-    for i in range(4):
-        robot.drive_straight(500, delay=Delay)
-        sleep(0.5)
-        robot.turn_in_place(90, delay=Delay)
-        sleep(0.5)
-except:
-    robot.stop()

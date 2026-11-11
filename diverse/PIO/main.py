@@ -1,10 +1,14 @@
 from time import sleep
 from stepper_motor_PIO import StepperMotorPIO
+from diff_drive_pio import DifferentialDrive
 import gc
 
 
-PIO_stepper = StepperMotorPIO(sm_id=0, base_pin=0, pwm_freq=18_000)
-PIO_stepper2 = StepperMotorPIO(sm_id=1, base_pin=4, pwm_freq=18_000)
+robot = DifferentialDrive(wheelbase=240, wheel_dia=87, steps_per_rev=50)
+
+
+#PIO_stepper = StepperMotorPIO(sm_id=0, base_pin=0, pwm_freq=18_000)
+#PIO_stepper2 = StepperMotorPIO(sm_id=1, base_pin=4, pwm_freq=18_000)
 try:
     """
     PIO_stepper._define_PWM_outputs()
@@ -33,20 +37,23 @@ try:
     #PIO_stepper._define_PWM_outputs()
     #PIO_stepper.set_step([1, 0, 0, 0], 0.5)
     
-    PIO_stepper.start_move_sequences(200, 0.001, "half")
-    PIO_stepper2.start_move_sequences(200, 0.001, "half")
+    sleep(2)
+
     gc.collect()
-    while PIO_stepper.currently_moving_stepper:
-        PIO_stepper.move_stepper()
-        PIO_stepper2.move_stepper(True)
-        #sleep(0.0005)
-    
-    PIO_stepper2.stop()
-    PIO_stepper.stop()
+    robot.drive_straight(2000, step_mode="full", delay=0.0025)
+    robot.turn_in_place(-92, step_mode="full", delay=0.0025)
+    robot.drive_straight(2000, step_mode="full", delay=0.0025)
+    robot.turn_in_place(-92, step_mode="full", delay=0.0025)
+    robot.drive_straight(3800, step_mode="full", delay=0.0025)
+    robot.turn_in_place(-92, step_mode="full", delay=0.0025)
+    robot.drive_straight(2000, step_mode="full", delay=0.0025)
+    robot.turn_in_place(-91, step_mode="full", delay=0.0025)
+    robot.drive_straight(1800, step_mode="full", delay=0.0025)
+
+    robot.stop()
     #sleep(2)
     #PIO_stepper.stop()
 
 except BaseException as e:
     print(e)
-    PIO_stepper.stop()
-    PIO_stepper2.stop()
+    robot.stop()

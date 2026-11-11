@@ -215,7 +215,7 @@ class StepperMotorPIO:
             #print(self.current_sequence)
 
         if direction == "backward":
-            self.current_sequence.reverse()
+            self.current_sequence = self.current_sequence[::-1]
         print(self.current_sequence)
 
         self.current_sequence = [[int(i*(2**16-1)*self.pwm_pct) for i in step] for step in self.current_sequence]
