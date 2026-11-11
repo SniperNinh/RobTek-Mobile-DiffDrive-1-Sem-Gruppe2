@@ -11,7 +11,7 @@ class WiiRemote:
         self.gyroscope = None
         self.ir = None
         self.accelerometer = None
-        self.associate_wii_devices(gyro=gyro, acc=acc, but=but, ir=ir)
+        self.associate_wii_devices(get_but=but, get_gyro=gyro, get_ir=ir, get_acc=acc)
     
     def __del__(self):
         self.close()
