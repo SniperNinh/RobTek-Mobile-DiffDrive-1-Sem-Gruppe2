@@ -1,6 +1,7 @@
 import math
 from machine import Pin, PWM
 from time import sleep
+from diff_drive import DifferentialDrive
 
 class StepperMotor:
     def __init__(self, pins, pwm_pct=0.5, frequency=18_000):
@@ -17,17 +18,23 @@ class StepperMotor:
                 [0, 0, self.v, self.v],
                 [self.v, 0, 0, self.v],
             ],
-            "half": [ # half step: skiftevis en og to spoler tændt
+            "half": [
                 [self.v, 0, 0, 0],
-                [self.v, self.v, 0, 0],
+                [self.v * 0.7071, self.v * 0.7071, 0, 0],
                 [0, self.v, 0, 0],
-                [0, self.v, self.v, 0],
+                [0, self.v * 0.7071, self.v * 0.7071, 0],
                 [0, 0, self.v, 0],
-                [0, 0, self.v, self.v],
+                [0, 0, self.v * 0.7071, self.v * 0.7071],
                 [0, 0, 0, self.v],
-                [self.v, 0, 0, self.v],
-            ], 
+                [self.v * 0.7071, 0, 0, self.v * 0.7071],
+            ],
         }
+        
+        for mode in self.modes:
+            self.modes[mode] = [
+                [int(value * 65535) for value in phase]
+                for phase in self.modes[mode]
+    ]
         self.mode = "full" # standard mode hvis man ikke vælger en
         self.stop() # starter med alle outputs slukket
 
@@ -63,39 +70,8 @@ class StepperMotor:
 
     def set_step(self, step):
         for output, duty in zip(self.outputs, step): # sender en tilstand ud til de 4 pins
-            output.duty_u16(int(duty * 65535)) # omregner fra 0-1 til 16 bit dutycycle
+            output.duty_u16(duty)
 
     def stop(self):
         self.set_step([0, 0, 0, 0]) # slukker alle 4 outputs
 
-    def rotate_full_step(self, steps, delay, direction="forward", continuous=False):
-        
-        if direction not in ("forward", "backward"):
-            raise ValueError("direction must be 'forward' or 'backward'") # fejl hvis retningen er forkert
-
-        delay = max(delay, 0.001) # delay kan ikke blive hurtigere end 1 ms
-
-        change = 1 # forward tæller total_steps op
-        sequence = self.modes[self.mode] # henter listen for den valgte mode
-        if direction == "backward":
-            sequence = sequence[::-1] # vender listen om så motoren drejer den anden vej
-            change = -1 # backward tæller total_steps ned
-
-        try:
-            stop_button = Pin(27, Pin.IN, Pin.PULL_UP) # stop knap, er 0 når den trykkes  
-            if continuous:
-                while  stop_button.value() != 0: # kører indtil knappen trykkes
-                    for step in sequence:
-                        self.set_step(step) # sender tilstanden til motoren
-                        sleep(delay) # venter mellem hvert step
-                        self.total_steps += change # opdaterer positionen
-            else:
-                    for _ in range(abs(steps)): # negative steps bruges som positive, retningen styres af direction
-                        if stop_button.value() == False:
-                            break # stopper hvis knappen trykkes
-                        for step in sequence:
-                            self.set_step(step)
-                            sleep(delay)
-                            self.total_steps += change
-        finally:
-            self.stop() # slukker altid outputs, også ved fejl eller afbrydelse

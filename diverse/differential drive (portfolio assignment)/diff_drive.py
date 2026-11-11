@@ -1,12 +1,13 @@
 from stepper_motor import StepperMotor
 from machine import Pin
-from time import sleep
+from time import sleep, ticks_diff, ticks_us, sleep_us, ticks_add
 import math
+import gc
 for i in range(29):
     Pin(i, Pin.OUT).off()
 
 class DifferentialDrive:
-    def __init__(self, motor1:StepperMotor, motor2:StepperMotor, wheelbase, wheel_dia, steps_per_rev=200):
+    def __init__(self, motor1:StepperMotor, motor2:StepperMotor, wheelbase, wheel_dia, delay_ramp, pwm_ramp, total_accel_steps, steps_per_rev=200):
         self.motor1 = motor1
         self.motor2 = motor2
         self.wheelbase_circ = math.pi * wheelbase   
@@ -14,13 +15,15 @@ class DifferentialDrive:
         self.steps_per_rev = steps_per_rev 
         self.phase1 = 0
         self.phase2 = 0
+        self.delay_ramp = delay_ramp
+        self.pmw_ramp = pwm_ramp
+        self.total_accel_steps = total_accel_steps
 
-    def getAccelDelay(self, start_delay, end_delay, total_accel_steps, steps_taken):
-        delay_delta = (end_delay-start_delay)/total_accel_steps
-        if end_delay < start_delay:
-            return max(start_delay + steps_taken*delay_delta, end_delay)
-        else:
-            return min(start_delay + steps_taken*delay_delta, end_delay)
+    def ramp_(self, start, end, total_accel_steps):
+            v0sq = 1 / (start * start)
+            v1sq = 1 / (end * end)
+            return [int(1 / (v0sq + (v1sq - v0sq) * (i + 1) / total_accel_steps) ** 0.5)
+                    for i in range(total_accel_steps)]
 
     def _move(self, full_steps: int, delay: float, dir1, dir2, driveMotor1 = True, driveMotor2 = True):
         """
@@ -45,46 +48,62 @@ class DifferentialDrive:
         total = round(full_steps * n / 4)
         c1 = 1 if dir1 == "forward" else -1
         c2 = 1 if dir2 == "forward" else -1
+        # braking 25% of pwm
+        seq1_brake = [[int(i * 0.25) for i in phase] for phase in seq1]
+        seq2_brake = [[int(i * 0.25) for i in phase] for phase in seq2]
 
         steps_taken = 0
+       
+        next_step = ticks_us()
+
+        initial_pwm = 0.2
+        n_acc = min(self.total_accel_steps, total // 2)
+
+
+        pwmramp = self.ramp_(self.pmw_ramp, initial_pwm, self.total_accel_steps)
+        delayramp = self.ramp_(self.delay_ramp, delay, self.total_accel_steps)
 
         # iterate through all steps and set pwm of motors accordingly 
         for _ in range(total):
+
+            if steps_taken < n_acc:
+                step_delay = delayramp[_]
+            elif _ >= total - n_acc:
+                step_delay = delayramp[total - 1 - _]      # decelerating (reversed ramp)
+            else:
+                step_delay = delay    
+            
+            
 
             # increment or decrement the phase index
             self.phase1 = (self.phase1 + c1) % n
             self.phase2 = (self.phase2 + c2) % n
 
-            # apply pwm to motors
+
             if driveMotor1:
                 self.motor1.set_step(seq1[self.phase1])
             if driveMotor2:
-                self.motor2.set_step(seq2[self.phase2])
+                self.motor2.set_step(seq1[self.phase2])
 
-            # steps_taken += 1
-            # steps_to_accel = 200
+            next_step = ticks_add(next_step, int(step_delay))
 
-            # big_delay = 0.007
-            
-            
-            # if steps_taken < steps_to_accel:
-            #     accel_delay = self.getAccelDelay(big_delay, delay, steps_to_accel, steps_taken)
-            # elif total-steps_taken < steps_to_accel:
-            #     accel_delay = self.getAccelDelay(delay, big_delay, steps_to_accel, steps_taken-(total-steps_to_accel))
+            remaining = ticks_diff(next_step, ticks_us())
 
-            # sleep(accel_delay)
-            # print(accel_delay)
-            sleep(delay)
+            if remaining > 0:
+                sleep_us(remaining)
+
+            gc.collect()
 
             # increment o decrement total steps according to direction c1 and c2
             self.motor1.total_steps += c1
             self.motor2.total_steps += c2
 
         # set both motors phase to 25% of the last set phase to brake the motors
-            self.motor1.set_step([i*0.25 for i in seq1[self.phase1]])
-            self.motor2.set_step([i*0.25 for i in seq2[self.phase2]])
+        self.motor1.set_step(seq1_brake[self.phase1])
+        self.motor2.set_step(seq2_brake[self.phase2])
 
-    def drive(self, distance: float, delay=0.002):
+
+    def drive(self, distance: float, delay):
         """
         Rotates both motor the appropriate amount to move the robot a specific distance in mm
 
@@ -97,7 +116,7 @@ class DifferentialDrive:
         dir = "forward" if distance >= 0 else "backward"
         self._move(full_steps, delay, dir, dir)
 
-    def turn_in_place(self, angle, delay=0.002):
+    def turn_in_place(self, angle, delay):
         """
         Rotates the motors in opposing directions to make the robot rotate a given angle.
 
@@ -130,3 +149,6 @@ class DifferentialDrive:
                 self._move(full_steps, delay, "backward", "forward", False, True)
             else:
                 self._move(full_steps, delay, "forward", "backward", True, False)
+
+
+        
