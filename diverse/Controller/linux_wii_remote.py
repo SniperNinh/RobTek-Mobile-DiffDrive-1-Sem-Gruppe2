@@ -42,14 +42,14 @@ class WiiRemote:
 
     def get_but_events(self):
         """
-        returns a list of tuples orginazed as (timestamp, button, value)
+        returns a list of lists of all button events orginazed as [[timestamp, button, value], [timestamp, button, value]]
         """
         key_events = []
         try:
             for event in self.buttons.read():
                 if event.type == evdev.ecodes.EV_KEY:
-                    event_tuple = (event.timestamp(), event.code, event.value)
-                    key_events.extend(event_tuple)
+                    event_val = [event.timestamp(), event.code, event.value]
+                    key_events.append(event_val)
         except BlockingIOError: pass
         return key_events
 
