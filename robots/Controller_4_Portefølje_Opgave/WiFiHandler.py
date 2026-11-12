@@ -2,12 +2,12 @@ import network
 from time import sleep
 import socket
 # Wi-Fi credentials
-ssid = 'NothingPhone(3)_9831'
-password = 'h4pr7ee2shsacb4'
+ssid = ''
+password = ''
 
-static_ip = '10.170.221.80'
+static_ip = '10.238.177.81'
 subnet_mask = '255.255.255.0'
-gateway_ip = '10.170.221.54'
+gateway_ip = '10.238.177.140'
 dns_server = '1.1.1.1'
 
 # Init Wi-Fi Interface
