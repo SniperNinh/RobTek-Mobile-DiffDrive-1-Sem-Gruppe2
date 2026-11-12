@@ -10,7 +10,7 @@ PICO_IP = "10.170.221.80"
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def send_command(command):
-    data = bytes([command])
+    data = command.to_bytes(2, byteorder='big', signed=True)
     client.sendto(data, (PICO_IP, 5000))
 
 
