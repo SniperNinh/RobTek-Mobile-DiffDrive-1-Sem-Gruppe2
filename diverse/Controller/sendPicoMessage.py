@@ -1,25 +1,20 @@
-
-import urllib.request
+import socket
 from linux_wii_remote import WiiRemote
 
 wii_remote = WiiRemote()
 
 PICO_IP = "10.170.221.80"
 
-def send_message(message):
 
-    url = f"http://10.170.221.80/"
+# Create UDP socket
+client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    request = urllib.request.Request(
-        url,
-        data=message.encode(),
-        method="POST",
-        headers={"Content-Type": "text/plain"}
-    )
+def send_command(command):
+    data = bytes([command])
+    client.sendto(data, (PICO_IP, 5000))
 
-    response = urllib.request.urlopen(request)
 
-    print(response)
-button_events = wii_remote.get_but_events()
-while True:
-    send_message("Button events: " + str(button_events))
+# Test commands
+send_command(1)
+send_command(2)
+send_command(0)

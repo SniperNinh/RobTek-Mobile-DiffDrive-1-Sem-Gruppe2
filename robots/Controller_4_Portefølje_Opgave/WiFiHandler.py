@@ -47,63 +47,17 @@ else:
 
 
 
-address = socket.getaddrinfo("0.0.0.0", 80)[0][-1]
-
-server = socket.socket()
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server.bind(address)
-server.listen(1)
+server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server.bind(("0.0.0.0", 5000))
 
 print("Server started!")
 print("Waiting for messages...")
 
 
 while True:
+    data, addr = server.recvfrom(32)
 
-    client, addr = server.accept()
+    # Extract first byte
+    command = data[0]
 
-    try:
-        request = b""
-
-        while b"\r\n\r\n" not in request:
-            part = client.recv(512)
-
-            if not part:
-                break
-
-            request += part
-
-        if b"\r\n\r\n" in request:
-
-            headers, body = request.split(b"\r\n\r\n", 1)
-
-            content_length = 0
-
-            for line in headers.split(b"\r\n"):
-                if line.lower().startswith(b"content-length:"):
-                    content_length = int(line.split(b":")[1].strip())
-
-            while len(body) < content_length:
-                part = client.recv(512)
-
-                if not part:
-                    break
-
-                body += part
-
-            message = body[:content_length].decode()
-
-            print("Received message:", message)
-
-        client.send(
-            b"HTTP/1.1 200 OK\r\n"
-            b"Content-Type: text/plain\r\n"
-            b"Connection: close\r\n\r\n"
-            b"Message received"
-        )
-
-    except Exception as e:
-        print("Error:", e)
-
-    finally:
-        client.close()
+    print("Received:", command)
