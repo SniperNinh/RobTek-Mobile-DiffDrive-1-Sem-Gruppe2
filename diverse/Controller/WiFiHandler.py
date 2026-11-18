@@ -2,8 +2,8 @@ import network
 from time import sleep
 import socket
 # Wi-Fi credentials
-ssid = ''
-password = ''
+ssid = 'Redmi 9'
+password = 'mr meowa'
 
 static_ip = '10.225.34.81'
 subnet_mask = '255.255.255.0'
