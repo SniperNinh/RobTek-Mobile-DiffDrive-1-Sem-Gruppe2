@@ -5,9 +5,9 @@ import socket
 ssid = ''
 password = ''
 
-static_ip = '10.238.177.81'
+static_ip = '10.225.34.81'
 subnet_mask = '255.255.255.0'
-gateway_ip = '10.238.177.140'
+gateway_ip = '10.225.34.36'
 dns_server = '1.1.1.1'
 
 # Init Wi-Fi Interface
@@ -19,7 +19,7 @@ wlan.connect(ssid, password)
 
 # Wait for Wi-Fi connection
 connection_timeout = 0
-print("blablæalba")
+
 while connection_timeout < 20:
     if wlan.status() >= 3:
         break
@@ -57,7 +57,11 @@ print("Waiting for messages...")
 while True:
     data, addr = server.recvfrom(32)
 
-    # Extract first byte
-    command = data[0]
+    y_axis = int.from_bytes(data[0:2], 'big') -500
+    z_axis = int.from_bytes(data[2:4], 'big') -500
+    held_buttons = data[4]
+    print(y_axis)
+    print(z_axis)
+    print(held_buttons)
 
-    print("Received:", command)
+    #print("Received:", data)
