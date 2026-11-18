@@ -1,13 +1,15 @@
 from stepper_motor import StepperMotor
+from PID import PID
 from machine import Pin
 from time import sleep, ticks_diff, ticks_us, sleep_us, ticks_add
 import math
 import gc
+import _thread
 for i in range(29):
     Pin(i, Pin.OUT).off()
 
 class DifferentialDrive:
-    def __init__(self, motor1:StepperMotor, motor2:StepperMotor, wheelbase, wheel_dia, delay_ramp, pwm_ramp, total_accel_steps, steps_per_rev=200):
+    def __init__(self, motor1:StepperMotor, motor2:StepperMotor, deviance:PID, wheelbase, wheel_dia, steps_per_rev=200, pid_period_us=100000, pid_scale=2000, min_delay=2000):
         self.motor1 = motor1
         self.motor2 = motor2
         self.wheelbase_circ = math.pi * wheelbase   
@@ -15,9 +17,16 @@ class DifferentialDrive:
         self.steps_per_rev = steps_per_rev 
         self.phase1 = 0
         self.phase2 = 0
-        self.delay_ramp = delay_ramp
-        self.pmw_ramp = pwm_ramp
-        self.total_accel_steps = total_accel_steps
+        self.deviance = deviance
+        self.devianceDelay = 0        # shared value: written by core 1, read by core 0
+        self.pid_running = False
+        self.pid_period_us = pid_period_us   # how often the PID runs
+        self.min_delay = min_delay           # the delay is never allowed below this
+
+        self.motor1_accumulator = 0
+        self.motor2_accumulator = 0
+
+        self.out = 0
 
     def ramp_(self, start, end, total_accel_steps):
             v0sq = 1 / (start * start)
@@ -57,21 +66,11 @@ class DifferentialDrive:
         next_step = ticks_us()
 
         initial_pwm = 0.2
-        n_acc = min(self.total_accel_steps, total // 2)
-
-
-        pwmramp = self.ramp_(self.pmw_ramp, initial_pwm, self.total_accel_steps)
-        delayramp = self.ramp_(self.delay_ramp, delay, self.total_accel_steps)
+ 
 
         # iterate through all steps and set pwm of motors accordingly 
         for _ in range(total):
-
-            if steps_taken < n_acc:
-                step_delay = delayramp[_]
-            elif _ >= total - n_acc:
-                step_delay = delayramp[total - 1 - _]      # decelerating (reversed ramp)
-            else:
-                step_delay = delay    
+  
             
             
 
@@ -85,7 +84,7 @@ class DifferentialDrive:
             if driveMotor2:
                 self.motor2.set_step(seq1[self.phase2])
 
-            next_step = ticks_add(next_step, int(step_delay))
+            next_step = ticks_add(next_step, int(delay))
 
             remaining = ticks_diff(next_step, ticks_us())
 
@@ -151,4 +150,59 @@ class DifferentialDrive:
                 self._move(full_steps, delay, "forward", "backward", True, False)
 
 
-        
+
+    def _PID(self, stepmode, microsteps=None,):
+            self.motor1.set_step_mode(stepmode, microsteps)
+            self.motor2.set_step_mode(stepmode, microsteps)
+            self.seq1 = self.motor1.modes[self.motor1.mode]
+            self.seq2 = self.motor2.modes[self.motor2.mode]
+            self.n = len(self.seq1)
+            if len(self.seq2) != self.n:
+                raise ValueError("both motors must use the same step mode")
+
+
+            self.pid_running = True
+            _thread.start_new_thread(self._pid_loop, ())
+
+    def _pid_loop(self):                     # runs on core 1
+        try:
+            while self.pid_running:
+                self.dev = self.deviance.deviance()
+                self.out = self.deviance.PID_update(self.dev)
+                print(self.out)
+        except Exception as e:
+            print("pid thread died:", e)  
+            
+    def _PID_stop(self):
+        self.pid_running = False
+
+    def ballsack(self, seq1, n):
+
+        if self.motor1_accumulator >= 1.0:
+            self.motor1_accumulator -= 1.0
+            self.phase1 = (self.phase1 + 1) % n
+
+        if self.motor2_accumulator >= 1.0:
+            self.motor2_accumulator -= 1.0
+            self.phase2 = (self.phase2 + 1) % n
+
+        self.motor1.set_step(seq1[self.phase1])
+        self.motor2.set_step(seq1[self.phase2])
+
+    def runPID(self, max_pwm):
+
+        self.motor1_accumulator += 1
+        self.motor2_accumulator += 1
+
+        turn_fraction = max(abs(self.out), 0)
+
+        if self.out > 0: 
+            self.motor2_accumulator -= turn_fraction
+            self.motor2.v = max_pwm * min(1-turn_fraction, 1)
+        else:
+            self.motor1_accumulator -= turn_fraction
+            self.motor1.v = max_pwm * min(1-turn_fraction, 1)
+
+
+
+        self.ballsack(self.seq1, self.n)

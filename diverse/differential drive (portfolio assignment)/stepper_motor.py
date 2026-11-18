@@ -1,7 +1,6 @@
 import math
 from machine import Pin, PWM
 from time import sleep
-from diff_drive import DifferentialDrive
 
 class StepperMotor:
     def __init__(self, pins, pwm_pct=0.5, frequency=18_000):
