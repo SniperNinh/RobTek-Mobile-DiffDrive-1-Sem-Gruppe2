@@ -55,6 +55,7 @@ class DifferentialDrive:
             lock_motor=lock_motor
             )
     
+    def run_continously(self, direction, delay=)
     def stop(self):
         self.motorLeft.stop()
         self.motorRight.stop()
