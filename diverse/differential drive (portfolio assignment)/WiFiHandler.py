@@ -65,3 +65,7 @@ class WifiHandler:
         held_buttons = data[4]
         return y_axis, z_axis, held_buttons
 
+    def get_status(self):
+        if (network.WLAN(network.STA_IF).status() == 3):
+            return True
+        return False

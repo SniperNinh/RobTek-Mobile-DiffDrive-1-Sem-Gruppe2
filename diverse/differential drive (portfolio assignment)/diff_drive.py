@@ -152,21 +152,24 @@ class DifferentialDrive:
 
 
 
-    def _PIDorControllerinnit(self, stepmode, microsteps=None, controller=False,Pid = False):
+    def _PIDorControllerinnit(self, stepmode, microsteps=None):
             self.motor1.set_step_mode(stepmode, microsteps)
             self.motor2.set_step_mode(stepmode, microsteps)
             self.seq1 = self.motor1.modes[self.motor1.mode]
             self.seq2 = self.motor2.modes[self.motor2.mode]
+            self.seqreverse = self.seq1.reverse()
             self.n = len(self.seq1)
             if len(self.seq2) != self.n:
                 raise ValueError("both motors must use the same step mode")
 
-            if:
-                self.pid_running = True
-                _thread.start_new_thread(self._pid_loop, ())
-            if controller:
+        
+            if self.controller.get_status():
                 self.controllerDataLoop_running = True
                 _thread.start_new_thread(self.controlDataLoop, ())
+            else:
+                self.pid_running = True
+                _thread.start_new_thread(self._pid_loop, ())
+
 
     def _pid_loop(self):                     # runs on core 1
         try:
@@ -221,15 +224,35 @@ class DifferentialDrive:
             print("controller thread died:", e) 
 
 
-    def ballsackController(self, seq1, n):
-
-        if self.motor1_accumulator >= 1.0:
-            self.motor1_accumulator -= 1.0
+    def ballsackController(self, seq1, n, seqreverse):
+        self.seqreverse = seqreverse
+        if self.motor1_accumulator >= 100:
+            self.motor1_accumulator -= 100.0
             self.phase1 = (self.phase1 + 1) % n
 
-        if self.motor2_accumulator >= 1.0:
-            self.motor2_accumulator -= 1.0
+        if self.motor2_accumulator >= 100:
+            self.motor2_accumulator -= 100.0
             self.phase2 = (self.phase2 + 1) % n
 
         self.motor1.set_step(seq1[self.phase1])
         self.motor2.set_step(seq1[self.phase2])
+
+    def runcontroller(self, max_pwm):
+        if -10 < self.z < 10:
+            self.motor1_accumulator = 0
+            self.motor2_accumulator = 0
+            
+        self.motor1_accumulator += self.z
+        self.motor2_accumulator += self.z
+
+        turn_fraction = max(abs(self.y), 0)
+
+        if self.y > 0: 
+            self.motor2_accumulator -= turn_fraction
+            self.motor2.v = max_pwm * min(1-turn_fraction, 1)
+        else:
+            self.motor1_accumulator -= turn_fraction
+            self.motor1.v = max_pwm * min(1-turn_fraction, 1)
+
+
+        self.ballsackController(self.seq1, self.n, self.seqreverse)
