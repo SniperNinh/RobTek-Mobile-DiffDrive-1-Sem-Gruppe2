@@ -241,9 +241,9 @@ class DifferentialDrive:
         if -10 < self.z < 10:
             self.motor1_accumulator = 0
             self.motor2_accumulator = 0
-            
-        self.motor1_accumulator += self.z
-        self.motor2_accumulator += self.z
+
+        self.motor1_accumulator += min(abs(self.z), 100)
+        self.motor2_accumulator += min(abs(self.z), 100)
 
         turn_fraction = max(abs(self.y), 0)
 

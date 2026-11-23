@@ -25,7 +25,6 @@ controller = WifiHandler("NothingPhone(3)_9831", "PicoPassword", "10.149.229.128
 # init differential drive object
 robot = DifferentialDrive(motor1, motor2, pid, controller,  wheelbase=238, wheel_dia=87, steps_per_rev=200, pid_period_us=1000, pid_scale=100000, min_delay=500)
 
-
 robot._PIDorControllerinnit(stepmode, Microsteps)
 try:
     while True:
