@@ -2,31 +2,7 @@ from machine import Pin, PWM
 from rp2 import PIO, StateMachine, asm_pio
 from time import sleep
 
-# Idea:
-#  first pio program:
-#   generates a pwm signal
-#   
 
-
-
-@asm_pio(sideset_init=(PIO.OUT_LOW))
-def PIO_pwm():
-    """
-    high in ISR
-    low in OSR
-    (reasoning: if high reads from OSR, then when saving the low value in ISR, it's breifly in the OSR where high can read it)
-    """
-    wrap_target()
-
-    mov(x, isr) .side(0b1)
-    label("high_loop")
-    jmp(x_dec, "high_loop")
-
-    mov(x, osr) .side(0b0)
-    label("low_loop")
-    jmp(x_dec, "low_loop")
-    
-    wrap()
 
 
 @asm_pio(set_init=(PIO.IN_HIGH), sideset_init=(PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW))
@@ -90,24 +66,10 @@ def PIO_half_step():
 
 
 class StepperMotorPIO:
-    def __init__(self, motor_base, pwm_out, pwm_in, sm_motor_id=0, sm_pwm_id=4, sm_freq=5_120_000, pwm_repeats=40, pwm_cycles=256):
-        self._sm_motor = StateMachine(sm_motor_id, PIO_half_step, freq=sm_freq, in_base=Pin(pwm_in), sideset_base=Pin(motor_base))
-        self._sm_pwm   = StateMachine(sm_pwm_id, PIO_pwm, freq=sm_freq, sideset_base=Pin(pwm_out))
-        self.pwm_cycles = pwm_cycles
+    def __init__(self, motor_base, pwm_in, sm_id=0, sm_pwm_id=4, sm_freq=840_000, pwm_repeats=37):
+        self._sm_motor = StateMachine(sm_id, PIO_half_step, freq=sm_freq, in_base=Pin(pwm_in), sideset_base=Pin(motor_base))
         self.pwm_repeats = pwm_repeats
-        self.update_pwm(0.2)
         self.update_delay(self.pwm_repeats)
-
-    def update_pwm(self, new_pwm_pct):
-        self.pwm_pct = new_pwm_pct
-        high_cycles = int(self.pwm_cycles * new_pwm_pct -1)
-        low_cycles = max(0, int(self.pwm_cycles - high_cycles -2))
-        self._sm_pwm.put(high_cycles)
-        self._sm_pwm.put(low_cycles)
-        self._sm_pwm.exec("pull()")
-        self._sm_pwm.exec("mov(isr, osr)")
-        self._sm_pwm.exec("pull()")
-
     
     def update_delay(self, new_pwm_repeats):
         self.pwm_repeats = new_pwm_repeats
@@ -115,22 +77,28 @@ class StepperMotorPIO:
         self._sm_motor.exec("pull()")
     
     def stop(self):
-        self._sm_pwm.active(0)
         self._sm_motor.active(0)
         self._sm_motor.exec("nop() .side(0b0000)")
 
 
-PIO_stepper = StepperMotorPIO(motor_base=0, pwm_out=22, pwm_in=19)
-pwm_pin = PWM(Pin(22))
-pwm_pin.freq(22_000)
-pwm_pin.duty_u16(int(0.2* (2**16)))
+PIO_stepper = StepperMotorPIO(sm_id=0, motor_base=0, pwm_in=19)
+PIO_stepper2 = StepperMotorPIO(sm_id=1, motor_base=4, pwm_in=18)
+
+pwm_pin1 = PWM(Pin(22))
+pwm_pin1.freq(24_000)
+pwm_pin1.duty_u16(int(0.2* (2**16)))
+pwm_pin2 = PWM(Pin(15))
+pwm_pin2.freq(24_000)
+pwm_pin2.duty_u16(int(0.2* (2**16)))
 try:
     PIO_stepper._sm_motor.active(1)
-    #PIO_stepper._sm_pwm.active(1)
+    PIO_stepper2._sm_motor.active(1)
     sleep(3)
     while True:
         pass
 
 except:
-    pwm_pin.duty_u16(0)
+    pwm_pin1.duty_u16(0)
+    pwm_pin2.duty_u16(0)
     PIO_stepper.stop()
+    PIO_stepper2.stop()
