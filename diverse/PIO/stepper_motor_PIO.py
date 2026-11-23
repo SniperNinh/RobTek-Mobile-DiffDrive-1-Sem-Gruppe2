@@ -23,48 +23,54 @@ while y != 0:
     y -= 1
 """
 
-# This value is hardcoded, its equal to pwm_high + pwm_low + 3
-# If this value is off the calculated frequencies by the class cant be trusted
-clock_cycles_per_PWM = 40
+# This value is hardcoded, its equal to pwm_high + 1
+# If this value is off, the calculated frequencies by the class cant be trusted
+pwm_high_total = 32
 
 # by defining 'set_init' to a tupple with 4 entries we tell the 
 # statemachine running the program that we are working with 4 pins
 @asm_pio(set_init=(PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW))
 def PIO_set_step():
 
-    pwm_high = 7
-    pwm_low = 30
+    pwm_high = 31
 
-    mov(y, isr)   # we are copying the pwm_repeats value in the isr into the y-register
     wrap_target() # when the program hits 'wrap()' it returns here without using a cycle, kinda like a 'while True'
 
+    mov(y, isr)             # we are copying the value in the isr into the y-register
     label("step_0")
+    mov(x, osr)             # we are copying the value in the osr into the x-register
     set(pins, 0b1100) [pwm_high]
-    set(pins, 0b0000) [pwm_low]
+    set(pins, 0b0000)
+    label("pwm_0")
+    jmp(x_dec, "pwm_0")    # if x != 0, go run the code after the 'label("pwm_0")' and decrement x (after checking its value)
     jmp(y_dec, "step_0")    # if y != 0, go run the code after the 'label("step_0")' and decrement y (after checking its value)
-    mov(y, isr)
-    jmp(not_x, "step_3")
 
+    mov(y, isr)
     label("step_1")
+    mov(x, osr)
     set(pins, 0b0110) [pwm_high]
-    set(pins, 0b0000) [pwm_low]
+    set(pins, 0b0000)
+    label("pwm_1")
+    jmp(x_dec, "pwm_1")
     jmp(y_dec, "step_1")
-    mov(y, isr)
-    jmp(not_x, "step_0")
 
+    mov(y, isr)
     label("step_2")
+    mov(x, osr)
     set(pins, 0b0011) [pwm_high]
-    set(pins, 0b0000) [pwm_low]
+    set(pins, 0b0000)
+    label("pwm_2")
+    jmp(x_dec, "pwm_2")
     jmp(y_dec, "step_2")
-    mov(y, isr)
-    jmp(not_x, "step_1")
 
-    label("step_3")
-    set(pins, 0b1001) [pwm_high]
-    set(pins, 0b0000) [pwm_low]
-    jmp(y_dec, "step_3")
     mov(y, isr)
-    jmp(not_x, "step_2")
+    label("step_3")
+    mov(x, osr)
+    set(pins, 0b1001) [pwm_high]
+    set(pins, 0b0000)
+    label("pwm_3")
+    jmp(x_dec, "pwm_3")
+    jmp(y_dec, "step_3")
 
     wrap()
 
@@ -76,8 +82,9 @@ class StepperMotorPIO:
         # pwm_freq is used to calculate the statemachines frequency using the amount of clock cycles there is per PWM high-low signal
         # pwm_pct is only for the python pwm
         self.pwm_freq = pwm_freq
+        self.clock_cycles_per_PWM = int(pwm_high_total/pwm_pct)
 
-        self._sm = StateMachine(sm_id, PIO_set_step, freq=self.pwm_freq * clock_cycles_per_PWM, set_base=Pin(base_pin))
+        self._sm = StateMachine(sm_id, PIO_set_step, freq=self.pwm_freq * self.clock_cycles_per_PWM, set_base=Pin(base_pin))
         self._sm_id = sm_id
 
         self.base_pin = base_pin
@@ -129,22 +136,19 @@ class StepperMotorPIO:
         self._sm.exec("pull()")         # we make the statemachine move the pwm-repeats value into the osr
         self._sm.exec("mov(isr, osr)")  # and we copy it into the isr where the pwm_repeats value lives
 
-    def update_sm_direction(self, new_direction):
-        if new_direction == "forward":
-            self.pio_direction = 0
-        elif new_direction == "backward":
-            self.pio_direction = 1
-        else:
-            raise ValueError("Direction needs to be forward or backward, direction not changed in PIO")
-        self._sm.put(self.pio_direction)
+    def update_sm_pwm_pct(self, new_pwm_pct):
+        if 0 > new_pwm_pct > self.DEBUG_max_pwm_pct: raise ValueError(f"delay must be between 0.001 and {self.DEBUG_max_pwm_pct}")
+        self.pwm_pct = new_pwm_pct
+        
+        self._sm.put(int(32/self.pwm_pct - 32))
         self._sm.exec("pull()")
         self._sm.exec("mov(x, osr)")
 
-    def setup_PIO(self, direction, delay):
-        self._sm = StateMachine(self._sm_id, PIO_set_step, freq=self.pwm_freq * clock_cycles_per_PWM, set_base=Pin(self.base_pin))
+    def setup_PIO(self, delay, pwm_pct):
+        self._sm = StateMachine(self._sm_id, PIO_set_step, freq=self.pwm_freq * self.clock_cycles_per_PWM, set_base=Pin(self.base_pin))
 
         self.update_sm_pwm_delay(delay)
-        self.update_sm_direction(direction)
+        self.update_sm_pwm_pct(pwm_pct)
 
     def start_sm(self):
         self._sm.active(1)
@@ -160,7 +164,7 @@ class StepperMotorPIO:
         if not self.currently_moving_stepper: return
         current_tick = ticks_us()
         if ticks_diff(current_tick, self.last_step_tick) < (self.delay * 1_000_000): return
-        #if ticks_diff(current_tick, self.last_step_tick) > 3000: print(ticks_diff(current_tick, self.last_step_tick))
+        print(ticks_diff(current_tick, self.last_step_tick))
         
         self.current_step += 1
 
@@ -196,12 +200,13 @@ class StepperMotorPIO:
 
     def start_move_sequences(self, sequences, delay, step_mode, microsteps=None, direction="forward"):
         print(direction)
-        if self._sm.active():               raise ValueError("PIO is still running")
+        if self._sm.active():                raise ValueError("PIO is still running")
 
-        if not isinstance(sequences, int):  raise ValueError("sequences must be a integer")
+        if not isinstance(sequences, int):   raise ValueError("sequences must be a integer")
 
-        if not isinstance(delay, float):    raise ValueError("delay must be a float")
-        elif delay < 0.001:                 raise ValueError("delay cant be less than 0.001s")
+        if not isinstance(delay, float):     raise ValueError("delay must be a float")
+        elif delay < 0.001:                  raise ValueError("delay cant be less than 0.001s")
+        elif delay > self.DEBUG_max_pwm_pct: raise ValueError(f"delay cant be bigger than {self.DEBUG_max_pwm_pct}")
 
         if step_mode not in ("full", "half", "microstep"):                 raise ValueError('step_mode must be either "full" "half" or "microstep"')
         elif step_mode == "microstep" and not isinstance(microsteps, int): raise ValueError('set_mode is set to "microsteps" microsteps is not a integer')
@@ -216,13 +221,14 @@ class StepperMotorPIO:
 
         if direction == "backward":
             self.current_sequence = self.current_sequence[::-1]
-        print(self.current_sequence)
+        
 
         self.current_sequence = [[int(i*(2**16-1)*self.pwm_pct) for i in step] for step in self.current_sequence]
 
         self._define_PWM_outputs()
 
         self.delay = delay
+        print(delay, self.delay)
 
         self.current_step = 0
         self.current_steps_goal = sequences * len(self.current_sequence)

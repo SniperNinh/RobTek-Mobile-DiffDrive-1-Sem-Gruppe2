@@ -55,7 +55,24 @@ class DifferentialDrive:
             lock_motor=lock_motor
             )
     
-    def run_continously(self, direction, delay=)
+    def run_continuously(self, min_delay=0.002, max_pwm_pct=0.2):
+        # settup the PIO
+        # start the sm's
+
+        # the fastest delay a wheel will be running
+        self.min_PIO_delay = min_delay
+        self.max_PIO_pwm_pct = max_pwm_pct
+        self.motorLeft.setup_PIO(self.min_PIO_delay, self.max_PIO_pwm_pct)
+        self.motorRight.setup_PIO(self.min_PIO_delay, self.max_PIO_pwm_pct)
+        self.motorLeft.start_sm()
+        self.motorRight.start_sm()
+    
+    def update_continuous_ratio(self, ratio):
+        if ratio > 0:
+            self.motorRight.update_sm_pwm_delay(self.min_PIO_delay*(ratio + 1))
+        else:
+            self.motorLeft.update_sm_pwm_delay(self.min_PIO_delay*(abs(ratio) + 1))
+
     def stop(self):
         self.motorLeft.stop()
         self.motorRight.stop()
