@@ -3,15 +3,15 @@ from time import sleep
 import socket
 
 class WifiHandler:
-    def __init__(self, ssid, password, gateway_ip, dns_server):
+    def __init__(self, ssid, password, gateway_ip):
         # Wi-Fi credentials
-        ssid = ssid
-        password = password
+        self.ssid = ssid
+        self.password = password
 
-        static_ip = '10.225.34.81'
+        self.static_ip = '10.225.34.81'
         subnet_mask = '255.255.255.0'
         gateway_ip = gateway_ip
-        dns_server = dns_server
+        dns_server = "1.1.1.1"
 
         # Init Wi-Fi Interface
         wlan = network.WLAN(network.STA_IF)
