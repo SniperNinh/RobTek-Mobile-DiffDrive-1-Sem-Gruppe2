@@ -14,6 +14,7 @@ class WifiHandler:
         dns_server = "1.1.1.1"
 
         # Init Wi-Fi Interface
+        global wlan
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
 
@@ -55,6 +56,10 @@ class WifiHandler:
 
         print("Server started!")
         print("Waiting for messages...")
+    def get_status(self):
+            if (wlan.status() == 3):
+                return True
+            return False
 
 
     def get_data(self):
@@ -65,7 +70,3 @@ class WifiHandler:
         held_buttons = data[4]
         return y_axis, z_axis, held_buttons
 
-    def get_status(self):
-        if (network.WLAN(network.STA_IF).status() == 3):
-            return True
-        return False
