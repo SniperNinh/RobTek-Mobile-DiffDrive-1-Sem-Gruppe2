@@ -1,6 +1,6 @@
 from machine import Pin, PWM
 from rp2 import PIO, StateMachine, asm_pio
-from time import sleep
+from time import sleep, ticks_us
 
 
 
@@ -68,12 +68,11 @@ def PIO_half_step():
 class StepperMotorPIO:
     def __init__(self, motor_base, pwm_in, sm_id=0, sm_pwm_id=4, sm_freq=840_000, pwm_repeats=37):
         self._sm_motor = StateMachine(sm_id, PIO_half_step, freq=sm_freq, in_base=Pin(pwm_in), sideset_base=Pin(motor_base))
-        self.pwm_repeats = pwm_repeats
-        self.update_delay(self.pwm_repeats)
+        self.update_delay(pwm_repeats)
     
     def update_delay(self, new_pwm_repeats):
-        self.pwm_repeats = new_pwm_repeats
-        self._sm_motor.put(self.pwm_repeats)
+        #self.pwm_repeats = new_pwm_repeats
+        self._sm_motor.put(new_pwm_repeats)
         self._sm_motor.exec("pull()")
     
     def stop(self):
@@ -81,24 +80,53 @@ class StepperMotorPIO:
         self._sm_motor.exec("nop() .side(0b0000)")
 
 
-PIO_stepper = StepperMotorPIO(sm_id=0, motor_base=0, pwm_in=19)
-PIO_stepper2 = StepperMotorPIO(sm_id=1, motor_base=4, pwm_in=18)
+
+from WiFiHandler import WifiHandler
+
+wifieee = WifiHandler("Redmi 9", "mr meowa", "10.230.172.167")
+"""
+PIO_stepperleft = StepperMotorPIO(sm_id=0, motor_base=0, pwm_in=19, pwm_repeats=30)
+PIO_stepperright = StepperMotorPIO(sm_id=1, motor_base=4, pwm_in=18, pwm_repeats=35)
 
 pwm_pin1 = PWM(Pin(22))
 pwm_pin1.freq(24_000)
-pwm_pin1.duty_u16(int(0.2* (2**16)))
-pwm_pin2 = PWM(Pin(15))
+pwm_pin1.duty_u16(int(0.3* (2**16)))
+pwm_pin2 = PWM(Pin(26))
 pwm_pin2.freq(24_000)
-pwm_pin2.duty_u16(int(0.2* (2**16)))
+pwm_pin2.duty_u16(int(0.3* (2**16)))
+"""
 try:
-    PIO_stepper._sm_motor.active(1)
-    PIO_stepper2._sm_motor.active(1)
-    sleep(3)
+    """
+    PIO_stepperleft._sm_motor.active(1)
+    PIO_stepperright._sm_motor.active(1)
+    sleep(2)
+    time_stamp = ticks_us()
+    PIO_stepperright.update_delay(30)
+    print(time_stamp, ticks_us())
+
+    """
     while True:
-        pass
+        print(wifieee.get_data())
+        continue
+        """
+        y_val, z_val, buttons = wifieee.get_data()
+        print(y_val)
+        rotation = max(-100, min(100, y_val))/100
+        if rotation > 0:
+            PIO_stepperright.update_delay(int(30+40*rotation))
+            PIO_stepperleft.update_delay(30)
+        else:
+            PIO_stepperleft.update_delay(int(30-40*rotation))
+            PIO_stepperright.update_delay(30)
+            """
+        sleep(0.001)
 
 except:
     pwm_pin1.duty_u16(0)
     pwm_pin2.duty_u16(0)
-    PIO_stepper.stop()
-    PIO_stepper2.stop()
+    PIO_stepperleft.stop()
+    PIO_stepperright.stop()
+pwm_pin1.duty_u16(0)
+pwm_pin2.duty_u16(0)
+PIO_stepperleft.stop()
+PIO_stepperright.stop()
