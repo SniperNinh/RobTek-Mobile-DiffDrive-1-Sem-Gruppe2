@@ -4,7 +4,7 @@ import random, time, evdev
 
 wii_remote = WiiRemote()
 
-PICO_IP = "10.225.34.71"
+PICO_IP = "10.230.172.71"
 
 
 # Create UDP socket

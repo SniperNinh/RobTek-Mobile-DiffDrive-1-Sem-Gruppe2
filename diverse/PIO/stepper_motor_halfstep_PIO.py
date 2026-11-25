@@ -80,10 +80,10 @@ class StepperMotorPIO:
         pwm_pct  ; the default pwm duty cycle defined in the beginning
         """
         self.pwm_freq = pwm_freq
-        self._sm_motor = StateMachine(sm_id, PIO_half_step, in_base=Pin(pwm_in), sideset_base=Pin(motor_base))
+        self._sm_motor = StateMachine(sm_id, PIO_half_step, in_base=Pin(pwm_in), sideset_base=Pin(base_pin))
         self.pwm = PWM(Pin(pwm_out))
         self.pwm.freq(pwm_freq)
-        self.pwm.duty_u16(pwm_pct * (2**16 - 1))
+        self.pwm.duty_u16(int(pwm_pct * (2**16 - 1)))
         self.update_delay(delay)
     
     def update_delay(self, new_delay):
@@ -92,6 +92,7 @@ class StepperMotorPIO:
         floor(target_pwm_freq * new_delay) = step_repeats
         step_repeats/new_delay = actual_pwm_freq
         """
+        #print(new_delay, int(new_delay * self.pwm_freq))
         self._sm_motor.put(int(new_delay * self.pwm_freq))
         self._sm_motor.exec("pull()")
     
@@ -104,30 +105,33 @@ class StepperMotorPIO:
 from WiFiHandler import WifiHandler
 
 wifieee = WifiHandler("Redmi 9", "mr meowa", "10.230.172.167")
-"""
+
 PIO_stepperleft = StepperMotorPIO(sm_id=0, base_pin=0, pwm_in=19, pwm_out=22)
 PIO_stepperright = StepperMotorPIO(sm_id=1, base_pin=4, pwm_in=18, pwm_out=26)
-"""
+
 try:
-    """
+    
     PIO_stepperleft._sm_motor.active(1)
     PIO_stepperright._sm_motor.active(1)
     
-    """
+    
     while True:
+        """
         print(wifieee.get_data())
         continue
         """
         y_val, z_val, buttons = wifieee.get_data()
         print(y_val)
         rotation = max(-100, min(100, y_val))/100
+        #print(rotation)
         if rotation > 0:
-            PIO_stepperright.update_delay(int(rotation*0.001))
+            PIO_stepperright.update_delay(rotation*0.001+0.001)
             PIO_stepperleft.update_delay(0.001)
+            #print("high")
         else:
-            PIO_stepperleft.update_delay(int(rotation*0.001))
             PIO_stepperright.update_delay(0.001)
-        """
+            PIO_stepperleft.update_delay(-rotation*0.001+0.001)
+            #print("low")
 except:
     
     PIO_stepperleft.stop()
