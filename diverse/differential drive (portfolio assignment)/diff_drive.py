@@ -28,7 +28,10 @@ class DifferentialDrive:
         self.motor2_accumulator = 0
 
         self.out = 0
-
+        self.y = 0
+        self.z = 0
+        self.button = 0
+        self.dev = 0
     def ramp_(self, start, end, total_accel_steps):
             v0sq = 1 / (start * start)
             v1sq = 1 / (end * end)
