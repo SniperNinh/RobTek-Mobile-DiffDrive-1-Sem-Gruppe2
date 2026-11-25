@@ -218,4 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.vscode/extensions.json
 .vscode/RobTek-Mobile-DiffDrive-1-Sem-Gruppe2.code-workspace
+.vscode/extensions.json
