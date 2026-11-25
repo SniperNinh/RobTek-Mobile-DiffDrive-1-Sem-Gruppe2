@@ -192,10 +192,16 @@ class DifferentialDrive:
         if self.motor1_accumulator >= 1.0:
             self.motor1_accumulator -= 1.0
             self.phase1 = (self.phase1 + 1) % n
+        elif self.motor1_accumulator <= -1.0:
+            self.motor1_accumulator += 1.0
+            self.phase1 = (self.phase1 - 1) % n
 
         if self.motor2_accumulator >= 1.0:
             self.motor2_accumulator -= 1.0
             self.phase2 = (self.phase2 + 1) % n
+        elif self.motor2_accumulator <= -1.0:
+            self.motor2_accumulator += 1.0
+            self.phase2 = (self.phase2 - 1) % n
 
         self.motor1.set_step(seq1[self.phase1])
         self.motor2.set_step(seq1[self.phase2])
@@ -215,7 +221,7 @@ class DifferentialDrive:
             self.motor1.v = max_pwm * min(1-turn_fraction, 1)
 
 
-
+# KØR MÅSKE REVERSE HER!!
         self.ballsack(self.seq1, self.n)
 
     def controlDataLoop(self):
@@ -236,11 +242,14 @@ class DifferentialDrive:
         if self.motor2_accumulator >= 100:
             self.motor2_accumulator -= 100.0
             self.phase2 = (self.phase2 + 1) % n
-
+       
         self.motor1.set_step(seq1[self.phase1])
         self.motor2.set_step(seq1[self.phase2])
+       
+
 
     def runcontroller(self, max_pwm):
+        self.y, self.z, self.button  = self.controller.get_data()
         if -10 < self.z < 10:
             self.motor1_accumulator = 0
             self.motor2_accumulator = 0
@@ -257,5 +266,4 @@ class DifferentialDrive:
             self.motor1_accumulator -= turn_fraction
             self.motor1.v = max_pwm * min(1-turn_fraction, 1)
 
-
-        self.ballsackController(self.seq1, self.n, self.seqreverse)
+          

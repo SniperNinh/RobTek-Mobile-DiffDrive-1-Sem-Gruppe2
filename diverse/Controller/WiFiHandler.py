@@ -14,6 +14,7 @@ class WifiHandler:
         dns_server = "1.1.1.1"
 
         # Init Wi-Fi Interface
+        global wlan
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
 
@@ -64,4 +65,3 @@ class WifiHandler:
         z_axis = int.from_bytes(data[2:4], 'big') -500
         held_buttons = data[4]
         return y_axis, z_axis, held_buttons
-    

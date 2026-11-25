@@ -64,9 +64,9 @@ class WifiHandler:
 
     def get_data(self):
         data, addr = self.server.recvfrom(32)
-
         y_axis = int.from_bytes(data[0:2], 'big') -500
         z_axis = int.from_bytes(data[2:4], 'big') -500
         held_buttons = data[4]
+        print(data)
+        print(y_axis, z_axis, held_buttons)
         return y_axis, z_axis, held_buttons
-
