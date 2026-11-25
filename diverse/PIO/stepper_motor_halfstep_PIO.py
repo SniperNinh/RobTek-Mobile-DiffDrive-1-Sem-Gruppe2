@@ -1,15 +1,17 @@
 from machine import Pin, PWM
 from rp2 import PIO, StateMachine, asm_pio
-from time import sleep, ticks_us
-
-
+from time import sleep
 
 
 @asm_pio(set_init=(PIO.IN_HIGH), sideset_init=(PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW, PIO.OUT_LOW))
 def PIO_half_step():
     """
-    delay is saved as mount of times we repeat the same step
-    delay is saved in the OSR
+    PIO assembly code for stepping through a half-step sequence.
+    It synchronises with the 'in_base' input pin,
+    where it follows the high-low timing.
+    (as in, its step goes high when input is high, and output low when input is low)
+
+    It repeats a step the amount of times stored in the OSR
     """
 
     wrap_target()
@@ -66,13 +68,31 @@ def PIO_half_step():
 
 
 class StepperMotorPIO:
-    def __init__(self, motor_base, pwm_in, sm_id=0, sm_pwm_id=4, sm_freq=840_000, pwm_repeats=37):
-        self._sm_motor = StateMachine(sm_id, PIO_half_step, freq=sm_freq, in_base=Pin(pwm_in), sideset_base=Pin(motor_base))
-        self.update_delay(pwm_repeats)
+    def __init__(self, sm_id, base_pin, pwm_in, pwm_out, delay=0.001, pwm_freq=22_000, pwm_pct=0.2):
+        """
+        base_pin ; is the first GPIO pin for the output to the steppermotor, will define the base_pin + the next 3 pins
+        pwm_in   ; the GPIO pin the statemachine follows for timing the step sequence
+        pwm_out  ; the GPIO pin the stepper motor object defines as output for its pwm
+        (pwm_in and pwm_out needs to be connected through hardware)
+        sm_id    ; the id of the statemachine to use, 0-3 & 4-7 are avaliable
+        delay    ; the default delay defined in the beginning
+        pwm_freq ; the targeted frequency of the pwm
+        pwm_pct  ; the default pwm duty cycle defined in the beginning
+        """
+        self.pwm_freq = pwm_freq
+        self._sm_motor = StateMachine(sm_id, PIO_half_step, in_base=Pin(pwm_in), sideset_base=Pin(motor_base))
+        self.pwm = PWM(Pin(pwm_out))
+        self.pwm.freq(pwm_freq)
+        self.pwm.duty_u16(pwm_pct * (2**16 - 1))
+        self.update_delay(delay)
     
-    def update_delay(self, new_pwm_repeats):
-        #self.pwm_repeats = new_pwm_repeats
-        self._sm_motor.put(new_pwm_repeats)
+    def update_delay(self, new_delay):
+        """
+        Math for calculating precise delays
+        floor(target_pwm_freq * new_delay) = step_repeats
+        step_repeats/new_delay = actual_pwm_freq
+        """
+        self._sm_motor.put(int(new_delay * self.pwm_freq))
         self._sm_motor.exec("pull()")
     
     def stop(self):
@@ -85,25 +105,14 @@ from WiFiHandler import WifiHandler
 
 wifieee = WifiHandler("Redmi 9", "mr meowa", "10.230.172.167")
 """
-PIO_stepperleft = StepperMotorPIO(sm_id=0, motor_base=0, pwm_in=19, pwm_repeats=30)
-PIO_stepperright = StepperMotorPIO(sm_id=1, motor_base=4, pwm_in=18, pwm_repeats=35)
-
-pwm_pin1 = PWM(Pin(22))
-pwm_pin1.freq(24_000)
-pwm_pin1.duty_u16(int(0.3* (2**16)))
-pwm_pin2 = PWM(Pin(26))
-pwm_pin2.freq(24_000)
-pwm_pin2.duty_u16(int(0.3* (2**16)))
+PIO_stepperleft = StepperMotorPIO(sm_id=0, base_pin=0, pwm_in=19, pwm_out=22)
+PIO_stepperright = StepperMotorPIO(sm_id=1, base_pin=4, pwm_in=18, pwm_out=26)
 """
 try:
     """
     PIO_stepperleft._sm_motor.active(1)
     PIO_stepperright._sm_motor.active(1)
-    sleep(2)
-    time_stamp = ticks_us()
-    PIO_stepperright.update_delay(30)
-    print(time_stamp, ticks_us())
-
+    
     """
     while True:
         print(wifieee.get_data())
@@ -113,20 +122,16 @@ try:
         print(y_val)
         rotation = max(-100, min(100, y_val))/100
         if rotation > 0:
-            PIO_stepperright.update_delay(int(30+40*rotation))
-            PIO_stepperleft.update_delay(30)
+            PIO_stepperright.update_delay(int(rotation*0.001))
+            PIO_stepperleft.update_delay(0.001)
         else:
-            PIO_stepperleft.update_delay(int(30-40*rotation))
-            PIO_stepperright.update_delay(30)
-            """
-        sleep(0.001)
-
+            PIO_stepperleft.update_delay(int(rotation*0.001))
+            PIO_stepperright.update_delay(0.001)
+        """
 except:
-    pwm_pin1.duty_u16(0)
-    pwm_pin2.duty_u16(0)
+    
     PIO_stepperleft.stop()
     PIO_stepperright.stop()
-pwm_pin1.duty_u16(0)
-pwm_pin2.duty_u16(0)
+
 PIO_stepperleft.stop()
 PIO_stepperright.stop()
