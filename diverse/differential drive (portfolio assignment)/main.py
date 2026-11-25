@@ -21,7 +21,7 @@ motor2.set_step_mode(stepmode, microsteps=Microsteps)
 #init PID
 pid = PID(kp = 7, ki = 0, kd = 0, target = 0, ldrmiddle=ADC(26), ldrright=ADC(28), ldrleft=ADC(27))
 #init Controller object
-controller = WifiHandler("NothingPhone(3)_9831", "PicoPassword", "10.149.229.128")
+controller = WifiHandler("Redmi 9", "mr meowa", "10.230.172.167")
 # init differential drive object
 robot = DifferentialDrive(motor1, motor2, pid, controller,  wheelbase=238, wheel_dia=87, steps_per_rev=200, pid_period_us=1000, pid_scale=100000, min_delay=500)
 
