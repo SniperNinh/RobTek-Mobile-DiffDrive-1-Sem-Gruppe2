@@ -29,5 +29,5 @@ while True:
     held_button_int |= (305 in held_buttons)
 
     # now we contruct a byte with the composition
-    send_wii_info(acc_val[1]+520, acc_val[2]+500, held_button_int)
+    send_wii_info(acc_val[1]+620, acc_val[2]+600, held_button_int)
     time.sleep(0.1)
