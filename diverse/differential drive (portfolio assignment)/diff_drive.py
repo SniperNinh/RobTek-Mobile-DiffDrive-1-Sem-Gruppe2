@@ -1,15 +1,14 @@
 from stepper_motor import StepperMotor
 from PID import PID
+from WiFiHandler import WifiHandler
 from machine import Pin
 from time import sleep, ticks_diff, ticks_us, sleep_us, ticks_add
 import math
 import gc
 import _thread
-for i in range(29):
-    Pin(i, Pin.OUT).off()
 
 class DifferentialDrive:
-    def __init__(self, motor1:StepperMotor, motor2:StepperMotor, deviance:PID, wheelbase, wheel_dia, steps_per_rev=200, pid_period_us=100000, pid_scale=2000, min_delay=2000):
+    def __init__(self, motor1:StepperMotor, motor2:StepperMotor, deviance:PID, controller:WifiHandler, wheelbase, wheel_dia, steps_per_rev=200, pid_period_us=100000, pid_scale=2000, min_delay=2000):
         self.motor1 = motor1
         self.motor2 = motor2
         self.wheelbase_circ = math.pi * wheelbase   
@@ -21,13 +20,18 @@ class DifferentialDrive:
         self.devianceDelay = 0        # shared value: written by core 1, read by core 0
         self.pid_running = False
         self.pid_period_us = pid_period_us   # how often the PID runs
-        self.min_delay = min_delay           # the delay is never allowed below this
+        self.min_delay = min_delay  
+        self.controller = controller
+        self.controllerDataLoop_running = True
 
         self.motor1_accumulator = 0
         self.motor2_accumulator = 0
 
         self.out = 0
-
+        self.y = 0
+        self.z = 0
+        self.button = 0
+        self.dev = 0
     def ramp_(self, start, end, total_accel_steps):
             v0sq = 1 / (start * start)
             v1sq = 1 / (end * end)
@@ -151,40 +155,53 @@ class DifferentialDrive:
 
 
 
-    def _PID(self, stepmode, microsteps=None,):
+    def _PIDorControllerinnit(self, stepmode, microsteps=None):
             self.motor1.set_step_mode(stepmode, microsteps)
             self.motor2.set_step_mode(stepmode, microsteps)
             self.seq1 = self.motor1.modes[self.motor1.mode]
             self.seq2 = self.motor2.modes[self.motor2.mode]
+            self.seqreverse = self.seq1.reverse()
             self.n = len(self.seq1)
             if len(self.seq2) != self.n:
                 raise ValueError("both motors must use the same step mode")
 
+        
+            if self.controller.get_status():
+                self.controllerDataLoop_running = True
+                _thread.start_new_thread(self.controlDataLoop, ())
+            else:
+                self.pid_running = True
+                _thread.start_new_thread(self._pid_loop, ())
 
-            self.pid_running = True
-            _thread.start_new_thread(self._pid_loop, ())
 
     def _pid_loop(self):                     # runs on core 1
         try:
             while self.pid_running:
                 self.dev = self.deviance.deviance()
                 self.out = self.deviance.PID_update(self.dev)
-                print(self.out)
+                sleep_us(self.pid_period_us)
         except Exception as e:
             print("pid thread died:", e)  
             
-    def _PID_stop(self):
+    def _PID_Controller_stop(self):
         self.pid_running = False
+        self.controllerDataLoop_running = False
 
     def ballsack(self, seq1, n):
 
         if self.motor1_accumulator >= 1.0:
             self.motor1_accumulator -= 1.0
             self.phase1 = (self.phase1 + 1) % n
+        elif self.motor1_accumulator <= -1.0:
+            self.motor1_accumulator += 1.0
+            self.phase1 = (self.phase1 - 1) % n
 
         if self.motor2_accumulator >= 1.0:
             self.motor2_accumulator -= 1.0
             self.phase2 = (self.phase2 + 1) % n
+        elif self.motor2_accumulator <= -1.0:
+            self.motor2_accumulator += 1.0
+            self.phase2 = (self.phase2 - 1) % n
 
         self.motor1.set_step(seq1[self.phase1])
         self.motor2.set_step(seq1[self.phase2])
@@ -204,5 +221,49 @@ class DifferentialDrive:
             self.motor1.v = max_pwm * min(1-turn_fraction, 1)
 
 
-
+# KØR MÅSKE REVERSE HER!!
         self.ballsack(self.seq1, self.n)
+
+    def controlDataLoop(self):
+        try:
+            while self.controllerDataLoop_running:
+                self.y, self.z, self.button  = self.controller.get_data()
+                sleep_us(self.pid_period_us)
+        except Exception as e:
+            print("controller thread died:", e) 
+
+
+    def ballsackController(self, seq1, n, seqreverse):
+        self.seqreverse = seqreverse
+        if self.motor1_accumulator >= 100:
+            self.motor1_accumulator -= 100.0
+            self.phase1 = (self.phase1 + 1) % n
+
+        if self.motor2_accumulator >= 100:
+            self.motor2_accumulator -= 100.0
+            self.phase2 = (self.phase2 + 1) % n
+       
+        self.motor1.set_step(seq1[self.phase1])
+        self.motor2.set_step(seq1[self.phase2])
+       
+
+
+    def runcontroller(self, max_pwm):
+        self.y, self.z, self.button  = self.controller.get_data()
+        if -10 < self.z < 10:
+            self.motor1_accumulator = 0
+            self.motor2_accumulator = 0
+
+        self.motor1_accumulator += min(abs(self.z), 100)
+        self.motor2_accumulator += min(abs(self.z), 100)
+
+        turn_fraction = max(abs(self.y), 0)
+
+        if self.y > 0: 
+            self.motor2_accumulator -= turn_fraction
+            self.motor2.v = max_pwm * min(1-turn_fraction, 1)
+        else:
+            self.motor1_accumulator -= turn_fraction
+            self.motor1.v = max_pwm * min(1-turn_fraction, 1)
+
+          
