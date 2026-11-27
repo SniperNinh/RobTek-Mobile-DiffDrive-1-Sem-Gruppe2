@@ -16,8 +16,8 @@ def send_wii_info(y_value, z_value, buttons_int):
     z_bytes = z_value.to_bytes(2, 'big')
     held_button_byte = buttons_int.to_bytes(1, 'big')
     data = y_bytes + z_bytes + held_button_byte
-    y_axis = int.from_bytes(data[0:2], 'big') -500
-    z_axis = int.from_bytes(data[2:4], 'big') -500
+    y_axis = int.from_bytes(data[0:2], 'big') -600
+    z_axis = int.from_bytes(data[2:4], 'big') -600
     held_buttons = data[4]
     print(y_axis, z_axis, held_buttons)
     client.sendto(data, (PICO_IP, 5000))

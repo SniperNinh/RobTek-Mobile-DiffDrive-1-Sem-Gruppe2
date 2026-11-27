@@ -3,6 +3,8 @@ from WiFiHandler import WifiHandler
 from rp2 import PIO
 from time import sleep
 from machine import Pin
+from LCD import *
+
 
 Pin("LED").off()
 
@@ -10,14 +12,16 @@ wifieee = WifiHandler("Redmi 9", "mr meowa", "10.230.172.167")
 
 Pin("LED").on()
 
-PIO_stepperleft = StepperMotorPIO(sm_id=0, base_pin=0, pwm_in=16, pwm_out=17)
-PIO_stepperright = StepperMotorPIO(sm_id=1, base_pin=4, pwm_in=18, pwm_out=19)
+PIO_stepperleft = StepperMotorPIO(sm_id=0, base_pin=0, pwm_in=16, pwm_out=17, pwm_pct=0.3)
+PIO_stepperright = StepperMotorPIO(sm_id=1, base_pin=4, pwm_in=18, pwm_out=19, pwm_pct=0.3)
+
+switch = Pin(9, Pin.IN)
 
 try:
     #PIO_stepperleft.start_sm()
     #PIO_stepperright.start_sm()
     
-    base_delay = 0.0008
+    base_delay = 0.0007
 
     #import random
 
@@ -25,12 +29,13 @@ try:
         y_val, z_val, buttons = wifieee.get_data()
         #y_val = random.randint(-100, 100)
         #z_val = random.randint(-100, 100)
-        if buttons & 0b10 != 0:
+        if (buttons & 0b10 != 0) or switch.value() == 1:
             raise BaseException("emergency stop")
 
         if buttons & 0b01 == 0:
             PIO_stepperleft.stop()
             PIO_stepperright.stop()
+            show(0)
             continue
         
         rotation = max(-100, min(100, y_val))/100
@@ -43,16 +48,17 @@ try:
         if abs(speed) < 0.3:
             speed = 0
         
+        show(speed*100)
         
         if speed != 0:
             PIO_stepperleft.start_sm()
             PIO_stepperright.start_sm()
-            if rotation > 0:
-                PIO_stepperright.update_delay(base_delay * (1 + rotation) /speed)
+            if rotation < 0:
+                PIO_stepperright.update_delay(base_delay * (1 - rotation) /speed)
                 PIO_stepperleft.update_delay(base_delay/speed)
-            elif rotation < 0:
+            elif rotation > 0:
                 PIO_stepperright.update_delay(base_delay/speed)
-                PIO_stepperleft.update_delay(base_delay * (1 - rotation) /speed)
+                PIO_stepperleft.update_delay(base_delay * (1 + rotation) /speed)
             else:
                 PIO_stepperleft.update_delay(base_delay/speed)
                 PIO_stepperright.update_delay(base_delay/speed)
