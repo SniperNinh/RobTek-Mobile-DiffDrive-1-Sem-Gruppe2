@@ -61,9 +61,9 @@ class WifiHandler:
         self.wlan.disconnect()
 
     def get_data(self):
-        print("getting data")
+        #print("getting data")
         data, addr = self.server.recvfrom(32)
-        print("data got")
+        #print("data got")
         y_axis = int.from_bytes(data[0:2], 'big') -600
         z_axis = int.from_bytes(data[2:4], 'big') -600
         held_buttons = data[4]
